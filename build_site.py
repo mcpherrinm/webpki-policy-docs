@@ -397,6 +397,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }}
   .controls input[type="search"] {{ cursor: text; width: 200px; }}
   .controls button:hover {{ background: var(--accent-bg); }}
+  .controls .repo-link {{
+    background: white;
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--fg);
+    text-decoration: none;
+  }}
+  .controls .repo-link:hover {{ background: var(--accent-bg); }}
 
   /* Loaded-sets bar */
   .loaded-sets-bar {{
@@ -824,6 +835,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button id="importFileBtn" title="Load a comments JSON as a read-only column">Load file…</button>
       <button id="importUrlBtn" title="Load a comments JSON from a URL">Load URL…</button>
       <input id="importInput" type="file" accept="application/json" style="display:none">
+      <a class="repo-link" href="https://github.com/mcpherrinm/webpki-policy-docs" target="_blank" rel="noopener" title="View source on GitHub">GitHub</a>
     </div>
   </div>
   <div id="loadedSetsBar" class="loaded-sets-bar" style="display:none"></div>
