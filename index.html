@@ -282,17 +282,20 @@
   }
   .elt-content a { color: var(--link); }
 
-  /* Per-element commentable wrapper styling */
+  /* Per-element commentable wrapper styling. Scope hover/active/flash to
+     elements inside the content cell — the .elt-status and .elt-comments
+     cells also carry data-elt-id (for find/repaint), and we don't want
+     hovering them to wipe out their colored background. */
   [data-elt-id] {
     position: relative;
   }
-  [data-elt-id]:hover {
+  .elt-content [data-elt-id]:hover {
     background: rgba(255, 240, 154, 0.18);
   }
-  [data-elt-id].active-target {
+  .elt-content [data-elt-id].active-target {
     background: rgba(255, 240, 154, 0.45);
   }
-  [data-elt-id].flash {
+  .elt-content [data-elt-id].flash {
     animation: flash 1.8s ease-out;
   }
   @keyframes flash {
