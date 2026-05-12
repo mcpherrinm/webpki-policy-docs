@@ -44,6 +44,10 @@ REQ_DOCS = [
     ("leaves", "Leaves", "leaves.md"),
 ]
 
+ANALYSIS_DOCS = [
+    ("ambiguity-report", "Ambiguity Report", "ambiguity-report.md"),
+]
+
 # Map citation prefix (as it appears in requirement markdown) to source doc key.
 CITATION_SRC_TO_KEY = {
     "CABF BR": "cabf_br",
@@ -134,6 +138,98 @@ def parse_requirement_doc(path):
     for it in out:
         it["item_id"] = f"{it['section_anchor']}.{it['item']}"
     return out
+
+
+def parse_analysis_doc(path):
+    """Parse an analysis markdown doc (e.g., the ambiguity report) into structured findings.
+
+    Structure:
+      # Title (one H1)
+      preamble markdown (between H1 and first H2)
+      ## Section heading
+        section intro markdown (before first H3)
+        ### A1. Finding heading
+          body markdown for finding A1
+        ### A2. ...
+
+    Findings are identified by an H3 whose text starts with an ID like "A1" / "B12" / "S3".
+    """
+    text = open(path).read()
+    title = None
+    preamble_lines = []
+    sections = []
+    cur_section = None
+    cur_finding = None
+    state = "pre-h1"
+
+    def finalize_finding():
+        nonlocal cur_finding
+        if cur_finding is not None and cur_section is not None:
+            cur_finding["body"] = "".join(cur_finding.pop("body_lines")).strip("\n")
+            cur_section["findings"].append(cur_finding)
+            cur_finding = None
+
+    def finalize_section():
+        nonlocal cur_section
+        finalize_finding()
+        if cur_section is not None:
+            cur_section["intro"] = "".join(cur_section.pop("intro_lines")).strip("\n")
+            sections.append(cur_section)
+            cur_section = None
+
+    for line in text.splitlines(keepends=True):
+        m_h1 = re.match(r"^# (.+?)\s*$", line)
+        m_h2 = re.match(r"^## (.+?)\s*$", line)
+        m_h3 = re.match(r"^### (.+?)\s*$", line)
+
+        if m_h1 and state == "pre-h1":
+            title = m_h1.group(1)
+            state = "preamble"
+            continue
+        if m_h2:
+            finalize_section()
+            cur_section = {
+                "heading": m_h2.group(1),
+                "anchor": "sec-" + slugify(m_h2.group(1), 60),
+                "intro_lines": [],
+                "findings": [],
+            }
+            state = "in-section"
+            continue
+        if m_h3 and state == "in-section":
+            finalize_finding()
+            heading = m_h3.group(1)
+            id_match = re.match(r"^([A-Z]+\d+)\b", heading)
+            fid = id_match.group(1) if id_match else slugify(heading, 12)
+            # Strip the leading "A1. " from the visible heading text
+            short_heading = re.sub(r"^[A-Z]+\d+\.\s*", "", heading).strip()
+            cur_finding = {
+                "id": fid,
+                "heading": short_heading,
+                "raw_heading": heading,
+                "body_lines": [],
+            }
+            continue
+
+        if state == "pre-h1":
+            continue
+        if state == "preamble":
+            preamble_lines.append(line)
+        elif state == "in-section":
+            if cur_finding is not None:
+                cur_finding["body_lines"].append(line)
+            else:
+                cur_section["intro_lines"].append(line)
+
+    finalize_section()
+
+    finding_count = sum(len(s["findings"]) for s in sections)
+    return {
+        "title": title,
+        "preamble": "".join(preamble_lines).strip("\n"),
+        "sections": sections,
+        "finding_count": finding_count,
+    }
 
 
 def build_reverse_index(req_docs):
@@ -611,6 +707,67 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .search-hit .ctx {{ color: var(--muted); }}
   mark {{ background: #ffe88a; padding: 0 1px; }}
 
+  /* Analysis (ambiguity report) styling */
+  .analysis-page h1 {{ font-size: 22px; margin-top: 8px; }}
+  .analysis-section {{
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-size: 18px !important;
+    color: var(--fg) !important;
+    margin-top: 32px !important;
+    padding-bottom: 6px;
+  }}
+  .analysis-preamble, .analysis-section-intro {{
+    font-size: 13.5px;
+    margin-bottom: 14px;
+  }}
+  .analysis-section-intro p:first-child {{ margin-top: 4px; }}
+  .finding-card {{
+    border-left-color: var(--accent) !important;
+  }}
+  .finding-heading {{
+    font-weight: 600;
+    font-size: 14.5px;
+    margin-bottom: 6px;
+    line-height: 1.35;
+  }}
+  .finding-id {{
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin-right: 8px;
+    vertical-align: middle;
+    letter-spacing: 0.02em;
+  }}
+  .finding-body {{ font-size: 13.5px; }}
+  .finding-body p {{ margin: 6px 0; }}
+  .finding-body ul, .finding-body ol {{ margin: 6px 0; padding-left: 22px; }}
+  .finding-body li {{ margin: 2px 0; }}
+  .finding-body code {{
+    background: var(--code-bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+  }}
+  .report-link {{
+    color: var(--link);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--accent);
+    text-underline-offset: 2px;
+  }}
+  .report-link:hover {{
+    color: var(--accent);
+    background: var(--accent-bg);
+    text-decoration-style: solid;
+  }}
+  .navbtn.analysis {{ font-style: italic; font-weight: 600; }}
+
   @media (max-width: 900px) {{
     .req-card {{ grid-template-columns: 1fr; }}
     .req-side {{
@@ -631,6 +788,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     {req_nav}
     <span class="nav-label" style="margin-left:8px;">Sources:</span>
     {src_nav}
+    <span class="nav-label" style="margin-left:8px;">Analysis:</span>
+    {analysis_nav}
     <div class="controls">
       <input id="search" type="search" placeholder="Search (Enter to run)…">
       <button id="exportBtn" title="Download all notes + statuses as JSON">Export</button>
@@ -654,12 +813,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 // === Embedded data ===
 const SRC_DATA = {src_data_json};
 const REQ_DATA = {req_data_json};
+const ANALYSIS_DATA = {analysis_data_json};
 const REVERSE  = {reverse_json};
 const SRC_LABELS = {{
 {src_label_map}
 }};
 const REQ_LABELS = {{
 {req_label_map}
+}};
+const ANALYSIS_LABELS = {{
+{analysis_label_map}
 }};
 
 const STATUS_OPTIONS = [
@@ -941,6 +1104,181 @@ function renderSourcePage(key) {{
   return container;
 }}
 
+// === Linkifier for analysis docs ===
+
+const ANALYSIS_SRC_NAMES = [
+  {{ name: "CABF BR",   key: "cabf_br" }},
+  {{ name: "LE CP/CPS", key: "letsencrypt_cp_cps" }},
+  {{ name: "Mozilla",   key: "mozilla" }},
+  {{ name: "Chrome",    key: "chrome" }},
+  {{ name: "Apple",     key: "apple" }},
+  {{ name: "Microsoft", key: "microsoft" }},
+  {{ name: "CCADB",     key: "ccadb" }},
+  {{ name: "LE",        key: "letsencrypt_cp_cps" }},
+];
+
+function buildAnalysisLinkPatterns(analysisKey) {{
+  const escName = (s) => s.replace(/[.*+?^${{}}()|[\]\\\/]/g, "\\$&");
+  const srcAlt = ANALYSIS_SRC_NAMES.map((p) => escName(p.name)).join("|");
+  const srcNameToKey = {{}};
+  for (const p of ANALYSIS_SRC_NAMES) srcNameToKey[p.name] = p.key;
+
+  const patterns = [
+    // 1. Req-doc item ref: "roots.md §1.6 #3" or "leaves.md §10 #1–#5"
+    {{
+      re: /\b(roots|intermediates|leaves|cross-certs)\.md\s+§(\d+(?:\.\d+)*)\s+#(\d+)(?:\s*[–\-]\s*#?\d+)?/g,
+      build: (m) => {{
+        const sec = m[2].replace(/\./g, "-");
+        return {{ href: "#req/" + m[1] + "/" + sec + "." + m[3], text: m[0] }};
+      }},
+    }},
+    // 2. Source-name + section: "CABF BR §1.6.1"
+    {{
+      re: new RegExp("\\b(" + srcAlt + ")\\s+§(\\d+(?:\\.\\d+)*)", "g"),
+      build: (m) => {{
+        const key = srcNameToKey[m[1]];
+        const anchor = "sec-" + m[2].replace(/\./g, "-");
+        return {{ href: "#src/" + key + "/" + anchor, text: m[0] }};
+      }},
+    }},
+    // 3. Source file (optionally with line range): "cabf_br.md:281"
+    {{
+      re: /\b(cabf_br|mozilla|chrome|apple|microsoft|ccadb|letsencrypt_cp_cps)\.md(?::\d+(?:\s*[–\-]\s*\d+)?)?/g,
+      build: (m) => ({{ href: "#src/" + m[1], text: m[0] }}),
+    }},
+    // 4. Req-doc file: "roots.md" (with optional line range, no §...#... — those handled above)
+    {{
+      re: /\b(roots|intermediates|leaves|cross-certs)\.md(?::\d+(?:\s*[–\-]\s*\d+)?)?/g,
+      build: (m) => ({{ href: "#req/" + m[1], text: m[0] }}),
+    }},
+  ];
+  if (analysisKey) {{
+    // 5. Cross-finding refs inside the report: "(A1)", "(B12)"
+    patterns.push({{
+      re: /\(([A-Z]\d+)\)/g,
+      build: (m) => ({{ href: "#analysis/" + analysisKey + "/" + m[1], text: m[0] }}),
+    }});
+  }}
+  return patterns;
+}}
+
+function linkifyAnalysisRefs(root, analysisKey) {{
+  const patterns = buildAnalysisLinkPatterns(analysisKey);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {{
+    acceptNode: (n) => {{
+      let p = n.parentNode;
+      while (p && p !== root) {{
+        if (p.tagName === "A") return NodeFilter.FILTER_REJECT;
+        p = p.parentNode;
+      }}
+      return NodeFilter.FILTER_ACCEPT;
+    }},
+  }});
+  const nodes = [];
+  let cur;
+  while ((cur = walker.nextNode())) nodes.push(cur);
+
+  for (const tn of nodes) {{
+    const text = tn.nodeValue;
+    if (!text || text.length < 4) continue;
+    const matches = [];
+    for (let i = 0; i < patterns.length; i++) {{
+      const pat = patterns[i];
+      const re = new RegExp(pat.re.source, pat.re.flags);
+      let m;
+      while ((m = re.exec(text)) !== null) {{
+        matches.push({{ index: m.index, len: m[0].length, link: pat.build(m), order: i }});
+      }}
+    }}
+    if (matches.length === 0) continue;
+    matches.sort((a, b) => a.index - b.index || a.order - b.order);
+    const kept = [];
+    let lastEnd = -1;
+    for (const m of matches) {{
+      if (m.index >= lastEnd) {{
+        kept.push(m);
+        lastEnd = m.index + m.len;
+      }}
+    }}
+    if (kept.length === 0) continue;
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    for (const m of kept) {{
+      if (m.index > pos) frag.appendChild(document.createTextNode(text.substring(pos, m.index)));
+      const a = document.createElement("a");
+      a.className = "report-link";
+      a.href = m.link.href;
+      a.textContent = m.link.text;
+      frag.appendChild(a);
+      pos = m.index + m.len;
+    }}
+    if (pos < text.length) frag.appendChild(document.createTextNode(text.substring(pos)));
+    tn.parentNode.replaceChild(frag, tn);
+  }}
+}}
+
+function renderAnalysisPage(key) {{
+  const doc = ANALYSIS_DATA[key];
+  const container = document.createElement("div");
+  container.className = "req-page analysis-page";
+  const subtitle = (doc.finding_count || 0) + " findings parsed from " + doc.filename +
+    ". Notes are saved in your browser. Source and requirement references are clickable.";
+  container.innerHTML = '<h1>' + escapeHtml(doc.title || doc.label) + '</h1>' +
+    '<div class="doc-intro">' + escapeHtml(subtitle) + '</div>';
+
+  if (doc.preamble) {{
+    const pre = document.createElement("div");
+    pre.className = "analysis-preamble src-content";
+    pre.innerHTML = marked.parse(doc.preamble);
+    linkifyAnalysisRefs(pre, key);
+    container.appendChild(pre);
+  }}
+
+  for (const section of doc.sections) {{
+    const h = document.createElement("h2");
+    h.className = "section analysis-section";
+    h.id = section.anchor;
+    h.textContent = section.heading;
+    container.appendChild(h);
+
+    if (section.intro) {{
+      const intro = document.createElement("div");
+      intro.className = "analysis-section-intro src-content";
+      intro.innerHTML = marked.parse(section.intro);
+      linkifyAnalysisRefs(intro, key);
+      container.appendChild(intro);
+    }}
+
+    for (const f of section.findings) {{
+      const note = getNote(key, f.id);
+      const card = document.createElement("div");
+      card.className = "req-card finding-card status-unset";
+      card.id = f.id;
+      card.dataset.reqDoc = key;
+      card.dataset.itemId = f.id;
+      const bodyHtml = marked.parse(f.body);
+      card.innerHTML =
+        '<div class="req-main">' +
+          '<div class="finding-heading"><span class="finding-id">' + escapeHtml(f.id) + '</span> ' +
+            escapeHtml(f.heading) +
+          '</div>' +
+          '<div class="finding-body src-content"></div>' +
+        '</div>' +
+        '<div class="req-side">' +
+          '<div class="notes-label">Notes</div>' +
+          '<textarea data-note="' + escapeHtml(f.id) + '" placeholder="Notes for this finding…">' + escapeHtml(note) + '</textarea>' +
+          '<div class="meta"><span class="save-status"></span><span style="font-family:monospace;opacity:0.65">' + escapeHtml(key + "::" + f.id) + '</span></div>' +
+        '</div>';
+      const bodyDiv = card.querySelector(".finding-body");
+      bodyDiv.innerHTML = bodyHtml;
+      linkifyAnalysisRefs(bodyDiv, key);
+      container.appendChild(card);
+    }}
+  }}
+
+  return container;
+}}
+
 // === Routing / navigation ===
 
 function activate(kind, doc) {{
@@ -951,6 +1289,8 @@ function activate(kind, doc) {{
   main.innerHTML = "";
   if (kind === "req") {{
     main.appendChild(renderRequirementPage(doc));
+  }} else if (kind === "analysis") {{
+    main.appendChild(renderAnalysisPage(doc));
   }} else {{
     main.appendChild(renderSourcePage(doc));
   }}
@@ -979,6 +1319,17 @@ function navigateHash() {{
     }}
   }} else if (parts[0] === "src") {{
     activate("src", parts[1]);
+    if (parts[2]) {{
+      setTimeout(() => {{
+        const el = document.getElementById(parts[2]);
+        if (el) {{
+          el.scrollIntoView({{ behavior: "smooth", block: "start" }});
+          el.classList.add("flash");
+        }}
+      }}, 30);
+    }}
+  }} else if (parts[0] === "analysis") {{
+    activate("analysis", parts[1]);
     if (parts[2]) {{
       setTimeout(() => {{
         const el = document.getElementById(parts[2]);
@@ -1218,6 +1569,7 @@ navigateHash();
 def main():
     src_label_map = ",\n".join(f'  "{k}": "{lbl}"' for k, lbl, _ in SRC_DOCS)
     req_label_map = ",\n".join(f'  "{k}": "{lbl}"' for k, lbl, _ in REQ_DOCS)
+    analysis_label_map = ",\n".join(f'  "{k}": "{lbl}"' for k, lbl, _ in ANALYSIS_DOCS)
 
     src_data = {}
     for key, label, path in SRC_DOCS:
@@ -1231,11 +1583,19 @@ def main():
             raw = f.read()
         req_data[key] = {"label": label, "filename": path, "raw": raw, "items": items}
 
+    analysis_data = {}
+    for key, label, path in ANALYSIS_DOCS:
+        parsed = parse_analysis_doc(os.path.join(ROOT, path))
+        parsed["label"] = label
+        parsed["filename"] = path
+        analysis_data[key] = parsed
+
     reverse_index = build_reverse_index(req_data)
     marked_js = load_marked_js()
 
     src_data_json = json.dumps(src_data, ensure_ascii=False)
     req_data_json = json.dumps(req_data, ensure_ascii=False)
+    analysis_data_json = json.dumps(analysis_data, ensure_ascii=False)
     reverse_json = json.dumps(reverse_index, ensure_ascii=False)
 
     src_nav = "".join(
@@ -1246,16 +1606,23 @@ def main():
         f'<button class="navbtn req" data-kind="req" data-doc="{html.escape(k)}">{html.escape(lbl)}</button>'
         for k, lbl, _ in REQ_DOCS
     )
+    analysis_nav = "".join(
+        f'<button class="navbtn analysis" data-kind="analysis" data-doc="{html.escape(k)}">{html.escape(lbl)}</button>'
+        for k, lbl, _ in ANALYSIS_DOCS
+    )
 
     rendered = HTML_TEMPLATE.format(
         marked_js=marked_js,
         src_data_json=src_data_json,
         req_data_json=req_data_json,
+        analysis_data_json=analysis_data_json,
         reverse_json=reverse_json,
         src_nav=src_nav,
         req_nav=req_nav,
+        analysis_nav=analysis_nav,
         src_label_map=src_label_map,
         req_label_map=req_label_map,
+        analysis_label_map=analysis_label_map,
     )
     out_path = os.path.join(ROOT, "index.html")
     with open(out_path, "w", encoding="utf-8") as f:
