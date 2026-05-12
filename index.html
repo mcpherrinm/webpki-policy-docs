@@ -201,7 +201,7 @@
     padding: 12px 14px;
     margin-bottom: 10px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) repeat(var(--side-count, 1), var(--side-width, 320px));
     gap: 18px;
     border-left-width: 4px;
   }
@@ -311,6 +311,83 @@
     margin-top: 4px;
     display: flex;
     justify-content: space-between;
+  }
+  .req-side.loaded textarea {
+    background: #f4f3ee;
+    color: #444;
+    cursor: default;
+  }
+  .req-side .notes-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .req-side .set-name {
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .set-status-pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 9.5px;
+    color: white;
+    text-transform: capitalize;
+    letter-spacing: 0;
+  }
+  .set-status-pill.reviewed { background: var(--ok); }
+  .set-status-pill.needs-info { background: var(--info); }
+  .set-status-pill.noncompliant { background: var(--bad); }
+  .set-status-pill.unset { background: var(--unset-bg); color: #666; }
+
+  .loaded-sets-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 0 0;
+    font-size: 12px;
+  }
+  .loaded-sets-bar .label {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+  }
+  .loaded-set-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 9px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    font-size: 11px;
+  }
+  .loaded-set-chip.local {
+    background: var(--bg-alt);
+    color: var(--muted);
+    font-style: italic;
+  }
+  .loaded-set-chip .remove-btn {
+    cursor: pointer;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0 4px;
+    font-size: 14px;
+    line-height: 1;
+    font-family: inherit;
+    border-radius: 50%;
+  }
+  .loaded-set-chip .remove-btn:hover {
+    color: white;
+    background: var(--bad);
   }
 
   /* Source view */
@@ -506,7 +583,7 @@
   .navbtn.analysis { font-style: italic; font-weight: 600; }
 
   @media (max-width: 900px) {
-    .req-card { grid-template-columns: 1fr; }
+    .req-card { grid-template-columns: 1fr !important; }
     .req-side {
       border-left: none;
       border-top: 1px solid var(--border);
@@ -529,13 +606,13 @@
     <button class="navbtn analysis" data-kind="analysis" data-doc="ambiguity-report">Ambiguity Report</button>
     <div class="controls">
       <input id="search" type="search" placeholder="Search (Enter to run)…">
-      <button id="exportBtn" title="Download all notes + statuses as JSON">Export</button>
-      <label>
-        Import
-        <input id="importInput" type="file" accept="application/json" style="display:none">
-      </label>
+      <button id="exportBtn" title="Download Local notes + statuses as JSON">Export</button>
+      <button id="importFileBtn" title="Load a notes JSON file as a new side-by-side column">Load file…</button>
+      <button id="importUrlBtn" title="Load a notes JSON from a URL as a new side-by-side column">Load URL…</button>
+      <input id="importInput" type="file" accept="application/json" style="display:none">
     </div>
   </div>
+  <div id="loadedSetsBar" class="loaded-sets-bar" style="display:none"></div>
 </header>
 
 <main id="content"></main>
@@ -639,45 +716,126 @@ function allByPrefix(prefix) {
 function allNotes() { return allByPrefix(NOTE_KEY_PREFIX); }
 function allStatuses() { return allByPrefix(STATUS_KEY_PREFIX); }
 
-function importExportPayload(obj, mode) {
-  // Accept either a wrapped object with "notes" and "statuses" keys,
-  // or a legacy flat map of "docKey::itemId" -> note text.
+// === Loaded notes sets (side-by-side columns) ===
+const LOADED_SETS_KEY = "webpki-policy-loaded-sets::v1";
+let LOADED_SETS = [];
+
+function loadLoadedSetsFromStorage() {
+  try {
+    const raw = localStorage.getItem(LOADED_SETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+function saveLoadedSetsToStorage() {
+  try {
+    localStorage.setItem(LOADED_SETS_KEY, JSON.stringify(LOADED_SETS));
+  } catch (e) { console.error("Could not persist loaded sets:", e); }
+}
+
+function normalizeImportedPayload(obj) {
   let notes = {};
   let statuses = {};
   if (obj && typeof obj === "object" && !Array.isArray(obj)) {
     if (obj.notes && typeof obj.notes === "object") notes = obj.notes;
     if (obj.statuses && typeof obj.statuses === "object") statuses = obj.statuses;
-    if (!obj.notes && !obj.statuses) {
-      // Treat as legacy flat-notes object
-      notes = obj;
+    if (!obj.notes && !obj.statuses) notes = obj;
+  }
+  const cleanNotes = {};
+  for (const k of Object.keys(notes)) {
+    const v = notes[k];
+    if (typeof v === "string" && v.trim() !== "") cleanNotes[k] = v;
+  }
+  const cleanStatuses = {};
+  for (const k of Object.keys(statuses)) {
+    const v = statuses[k];
+    if (typeof v === "string" && v !== "unset" && STATUS_OPTIONS.some((o) => o.value === v)) {
+      cleanStatuses[k] = v;
     }
   }
+  return { notes: cleanNotes, statuses: cleanStatuses };
+}
 
-  if (mode === "replace") {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith(NOTE_KEY_PREFIX) || k.startsWith(STATUS_KEY_PREFIX))) keys.push(k);
-    }
-    keys.forEach((k) => localStorage.removeItem(k));
-  }
+function deriveSetName(source) {
+  if (!source) return "Imported";
+  let name = source;
+  try { name = decodeURIComponent(name); } catch (e) {}
+  name = name.replace(/[?#].*$/, "").replace(/\/$/, "");
+  const lastSlash = name.lastIndexOf("/");
+  if (lastSlash >= 0) name = name.substring(lastSlash + 1);
+  name = name.replace(/\.json$/i, "");
+  return name || "Imported";
+}
 
-  let nCount = 0;
-  for (const composite of Object.keys(notes)) {
-    const v = notes[composite];
-    if (typeof v !== "string" || v.trim() === "") continue;
-    localStorage.setItem(NOTE_KEY_PREFIX + composite, v);
-    nCount++;
+function addLoadedSet(name, payload, source) {
+  const norm = normalizeImportedPayload(payload);
+  const id = "set-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6);
+  LOADED_SETS.push({ id, name, notes: norm.notes, statuses: norm.statuses, source: source || "" });
+  saveLoadedSetsToStorage();
+  applySideCountVars();
+  renderLoadedSetsBar();
+  navigateHash();
+}
+
+function removeLoadedSet(id) {
+  LOADED_SETS = LOADED_SETS.filter((s) => s.id !== id);
+  saveLoadedSetsToStorage();
+  applySideCountVars();
+  renderLoadedSetsBar();
+  navigateHash();
+}
+
+function applySideCountVars() {
+  const n = LOADED_SETS.length + 1;
+  document.body.style.setProperty("--side-count", n);
+  let w = 320;
+  if (n === 2) w = 280;
+  else if (n === 3) w = 240;
+  else if (n >= 4) w = 210;
+  document.body.style.setProperty("--side-width", w + "px");
+}
+
+function renderLoadedSetsBar() {
+  const bar = document.getElementById("loadedSetsBar");
+  if (!bar) return;
+  if (LOADED_SETS.length === 0) {
+    bar.style.display = "none";
+    bar.innerHTML = "";
+    return;
   }
-  let sCount = 0;
-  for (const composite of Object.keys(statuses)) {
-    const v = statuses[composite];
-    if (typeof v !== "string" || !v || v === "unset") continue;
-    if (!STATUS_OPTIONS.some((o) => o.value === v)) continue;
-    localStorage.setItem(STATUS_KEY_PREFIX + composite, v);
-    sCount++;
+  bar.style.display = "flex";
+  let html = '<span class="label">Notes columns:</span>';
+  html += '<span class="loaded-set-chip local">Local (editable)</span>';
+  for (const s of LOADED_SETS) {
+    const nCount = Object.keys(s.notes).length;
+    const sCount = Object.keys(s.statuses).length;
+    const title = nCount + " note(s), " + sCount + " status(es)" + (s.source ? " from " + s.source : "");
+    html += '<span class="loaded-set-chip" title="' + escapeHtml(title) + '">' +
+            escapeHtml(s.name) +
+            ' <button class="remove-btn" title="Remove this notes column" data-remove-set="' + escapeHtml(s.id) + '">×</button></span>';
   }
-  return { notes: nCount, statuses: sCount };
+  bar.innerHTML = html;
+}
+
+function renderLoadedSideColumns(reqDocKey, itemId) {
+  if (LOADED_SETS.length === 0) return "";
+  let out = "";
+  const composite = reqDocKey + "::" + itemId;
+  for (const s of LOADED_SETS) {
+    const note = s.notes[composite] || "";
+    const status = s.statuses[composite] || "unset";
+    const statusLabel = status === "needs-info" ? "needs info" : status;
+    out += '<div class="req-side loaded">' +
+      '<div class="notes-label">' +
+        '<span class="set-name">' + escapeHtml(s.name) + '</span>' +
+        '<span class="set-status-pill ' + status + '">' + escapeHtml(statusLabel) + '</span>' +
+      '</div>' +
+      '<textarea readonly placeholder="(no notes)">' + escapeHtml(note) + '</textarea>' +
+      '<div class="meta"><span style="opacity:0.65">read-only</span><span style="font-family:monospace;opacity:0.65">' + escapeHtml(s.name) + '</span></div>' +
+    '</div>';
+  }
+  return out;
 }
 
 // === Filter state (in-memory, per session) ===
@@ -797,10 +955,11 @@ function renderRequirementPage(key) {
         statusButtonsHtml(status) +
       '</div>' +
       '<div class="req-side">' +
-        '<div class="notes-label">Notes</div>' +
+        '<div class="notes-label"><span class="set-name">Local</span></div>' +
         '<textarea data-note="' + escapeHtml(it.item_id) + '" placeholder="Notes for this requirement…">' + escapeHtml(note) + '</textarea>' +
         '<div class="meta"><span class="save-status"></span><span style="font-family:monospace;opacity:0.65">' + escapeHtml(key + "::" + it.item_id) + '</span></div>' +
-      '</div>';
+      '</div>' +
+      renderLoadedSideColumns(key, it.item_id);
     container.appendChild(card);
   }
   return container;
@@ -1017,10 +1176,11 @@ function renderAnalysisPage(key) {
           '<div class="finding-body src-content"></div>' +
         '</div>' +
         '<div class="req-side">' +
-          '<div class="notes-label">Notes</div>' +
+          '<div class="notes-label"><span class="set-name">Local</span></div>' +
           '<textarea data-note="' + escapeHtml(f.id) + '" placeholder="Notes for this finding…">' + escapeHtml(note) + '</textarea>' +
           '<div class="meta"><span class="save-status"></span><span style="font-family:monospace;opacity:0.65">' + escapeHtml(key + "::" + f.id) + '</span></div>' +
-        '</div>';
+        '</div>' +
+        renderLoadedSideColumns(key, f.id);
       const bodyDiv = card.querySelector(".finding-body");
       bodyDiv.innerHTML = bodyHtml;
       linkifyAnalysisRefs(bodyDiv, key);
@@ -1107,6 +1267,14 @@ document.addEventListener("click", (e) => {
     const kind = navbtn.dataset.kind;
     const doc = navbtn.dataset.doc;
     window.location.hash = "#" + kind + "/" + doc;
+    return;
+  }
+
+  // Remove a loaded notes set
+  const removeBtn = e.target.closest(".loaded-set-chip .remove-btn[data-remove-set]");
+  if (removeBtn) {
+    const id = removeBtn.dataset.removeSet;
+    if (confirm("Remove this loaded notes column?")) removeLoadedSet(id);
     return;
   }
 
@@ -1247,6 +1415,10 @@ document.getElementById("exportBtn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+document.getElementById("importFileBtn").addEventListener("click", () => {
+  document.getElementById("importInput").click();
+});
+
 document.getElementById("importInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1254,17 +1426,32 @@ document.getElementById("importInput").addEventListener("change", (e) => {
   reader.onload = (ev) => {
     try {
       const obj = JSON.parse(ev.target.result);
-      const mode = confirm("OK = MERGE imported notes/statuses with existing.\nCancel = REPLACE all existing notes/statuses.")
-        ? "merge" : "replace";
-      const r = importExportPayload(obj, mode);
-      alert("Imported " + r.notes + " notes and " + r.statuses + " statuses (" + mode + ").");
-      navigateHash();
+      const defaultName = deriveSetName(file.name);
+      const name = prompt("Name this notes column:", defaultName);
+      if (name === null) { e.target.value = ""; return; }
+      addLoadedSet(name.trim() || defaultName, obj, file.name);
     } catch (err) {
-      alert("Import failed: " + err.message);
+      alert("Load failed: " + err.message);
     }
     e.target.value = "";
   };
   reader.readAsText(file);
+});
+
+document.getElementById("importUrlBtn").addEventListener("click", async () => {
+  const url = prompt("Notes JSON URL (must be CORS-accessible):", "");
+  if (!url) return;
+  try {
+    const resp = await fetch(url, { mode: "cors" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const obj = await resp.json();
+    const defaultName = deriveSetName(url);
+    const name = prompt("Name this notes column:", defaultName);
+    if (name === null) return;
+    addLoadedSet(name.trim() || defaultName, obj, url);
+  } catch (err) {
+    alert("Load failed: " + err.message);
+  }
 });
 
 // === Search ===
@@ -1310,6 +1497,9 @@ function runSearch(q) {
 }
 
 // === Init ===
+LOADED_SETS = loadLoadedSetsFromStorage();
+applySideCountVars();
+renderLoadedSetsBar();
 navigateHash();
 </script>
 
