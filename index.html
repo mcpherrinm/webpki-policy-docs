@@ -1413,7 +1413,7 @@ function decorateSection(row) {
     strip.appendChild(seg);
 
     // 2) Per-element overrides — only elements with their own explicit status.
-    content.querySelectorAll("[data-elt-id]").forEach((el) => {
+    content.querySelectorAll("[data-elt-id]:not(.elt-handle)").forEach((el) => {
       const eid = el.dataset.eltId;
       if (eid === sectionId) return; // section span already painted
       const own = ownElementStatus(docKey, eid);
@@ -1428,7 +1428,7 @@ function decorateSection(row) {
 
     // 3) Left ref gutter: a clickable symbolic ref aligned with each element.
     if (refCol) {
-      content.querySelectorAll("[data-elt-id]").forEach((el) => {
+      content.querySelectorAll("[data-elt-id]:not(.elt-handle)").forEach((el) => {
         const eid = el.dataset.eltId;
         const rect = el.getBoundingClientRect();
         const a = document.createElement("a");
