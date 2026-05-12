@@ -1070,13 +1070,12 @@ async function renderDocPage(docKey) {
   const page = document.createElement("div");
   page.className = "doc-page";
   page.dataset.docKey = docKey;
-  page.setHTML(
+  page.innerHTML =
     '<h1 class="doc-title"><span class="doc-name"></span> <span class="doc-version"></span></h1>' +
     '<div class="doc-meta">Rendered from <code class="filename"></code>' +
     ' · <span class="counts"></span> · ' +
     'Refs look like <code class="ref-pat"></code> or <code class="ref-pat-p"></code> ' +
-    '(e.g. in code: <code class="ref-pat-code"></code>).</div>'
-  );
+    '(e.g. in code: <code class="ref-pat-code"></code>).</div>';
   page.querySelector(".doc-name").textContent = SRC_LABELS[docKey];
   page.querySelector(".doc-version").textContent = "v" + (doc.version || "");
   page.querySelector(".filename").textContent = doc.filename;
@@ -1090,7 +1089,7 @@ async function renderDocPage(docKey) {
   const tocWrap = document.createElement("details");
   tocWrap.className = "toc-wrap";
   tocWrap.open = false;
-  tocWrap.setHTML('<summary>Table of contents</summary><div class="toc-grid"></div>');
+  tocWrap.innerHTML = '<summary>Table of contents</summary><div class="toc-grid"></div>';
   page.appendChild(tocWrap);
   const tocBox = tocWrap.querySelector(".toc-grid");
 
@@ -1110,7 +1109,7 @@ async function renderDocPage(docKey) {
     content.className = "section-content";
     if (!chunk.heading) content.classList.add("preamble-block");
 
-    content.setHTML(marked.parse(chunk.body || ""));
+    content.innerHTML = marked.parse(chunk.body || "");
 
     // Compute section id for this chunk.
     let sectionId;
@@ -1232,7 +1231,7 @@ function refreshHandle(a) {
   const ref = formatRefSymbol(a.dataset.eltId);
   if (n > 0) {
     a.classList.add("has-comments");
-    a.setHTML('<span class="count"></span> <span class="ref"></span>');
+    a.innerHTML = '<span class="count"></span> <span class="ref"></span>';
     a.querySelector(".count").textContent = n;
     a.querySelector(".ref").textContent = ref;
     a.title = n + " comment(s) on " + a.dataset.docKey + "/" + a.dataset.eltId;
@@ -1279,7 +1278,7 @@ function makeCommentaryColumn({ kind, docKey, sectionId, set }) {
   } else {
     col.dataset.colKind = "loaded";
     col.dataset.setId = set.id;
-    col.setHTML('<div class="col-header"><span class="set-name"></span></div>');
+    col.innerHTML = '<div class="col-header"><span class="set-name"></span></div>';
     col.querySelector(".set-name").textContent = set.name;
   }
   renderCommentaryColumn(col);
@@ -1545,7 +1544,7 @@ function renderCommentMarkdownInto(target, md) {
   if (md.indexOf("\n\n") >= 0 || md.indexOf("\n- ") >= 0 || md.indexOf("\n* ") >= 0) {
     html = marked.parse(md);
   }
-  target.setHTML(html);
+  target.innerHTML = html;
   linkifyRefs(target);
 }
 
@@ -1667,21 +1666,20 @@ function linkifyRefs(root) {
 // ===== Manifest page =====
 function renderManifestPage() {
   const page = document.createElement("div");
-  page.setHTML(
+  page.innerHTML =
     '<h1 class="doc-title">ID Manifest</h1>' +
     '<div class="doc-meta"><span class="counts"></span> commentable elements across ' +
     '<span class="docs-count"></span> documents. ' +
     'Use any <code>ref</code> below as a stable cross-reference in code comments or notes — e.g. ' +
-    '<code>// webpki:cabf_br/7.1.2.10.2/p3</code>.</div>'
-  );
+    '<code>// webpki:cabf_br/7.1.2.10.2/p3</code>.</div>';
   page.querySelector(".counts").textContent = MANIFEST.length;
   page.querySelector(".docs-count").textContent = SRC_KEYS.length;
   const sw = document.createElement("div");
-  sw.setHTML('<input id="manifest-filter" type="search" placeholder="Filter… (ref, title, snippet)" style="width:340px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;margin-bottom:8px;">');
+  sw.innerHTML = '<input id="manifest-filter" type="search" placeholder="Filter… (ref, title, snippet)" style="width:340px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;margin-bottom:8px;">';
   page.appendChild(sw);
   const tbl = document.createElement("table");
   tbl.className = "manifest-table";
-  tbl.setHTML('<thead><tr><th>Ref</th><th>Doc</th><th>Section</th><th>Kind</th><th>Snippet</th></tr></thead><tbody></tbody>');
+  tbl.innerHTML = '<thead><tr><th>Ref</th><th>Doc</th><th>Section</th><th>Kind</th><th>Snippet</th></tr></thead><tbody></tbody>';
   page.appendChild(tbl);
   const tb = tbl.querySelector("tbody");
   for (const r of MANIFEST) {
