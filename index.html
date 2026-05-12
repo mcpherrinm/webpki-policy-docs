@@ -257,6 +257,7 @@
     white-space: nowrap;
   }
   [data-elt-id]:hover > .elt-handle,
+  tr[data-elt-id]:hover .elt-handle.row-handle,
   .elt-handle.has-comments,
   .elt-handle.active-target {
     opacity: 1;
@@ -272,10 +273,14 @@
     border-color: var(--note-border);
   }
   .elt-handle .count { font-weight: 700; }
-  li > .elt-handle, tr > .elt-handle { right: -32px; }
-  th .elt-handle, td .elt-handle { display: none; }
-  /* For table rows, handle goes to the side of the row */
-  tr[data-elt-id] { position: relative; }
+  li > .elt-handle { right: -32px; }
+  /* Row handle lives inside the last <td> of the row, positioned at the row's right edge. */
+  td.has-row-handle { position: relative; }
+  .elt-handle.row-handle {
+    right: -32px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
 
   /* Commentary column */
   .commentary-col {
@@ -928,7 +933,12 @@ function annotateElementsWithIds(content, sectionId, docKey) {
       node.dataset.eltId = eid;
       node.dataset.eltKind = "tr";
       const lastTd = node.lastElementChild;
-      if (lastTd) lastTd.appendChild(makeEltHandle(docKey, eid, "tr"));
+      if (lastTd) {
+        lastTd.classList.add("has-row-handle");
+        const handle = makeEltHandle(docKey, eid, "tr");
+        handle.classList.add("row-handle");
+        lastTd.appendChild(handle);
+      }
     }
   }
 }
