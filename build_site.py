@@ -1272,33 +1272,19 @@ function makeEltHandle(docKey, eltId, kind) {{
 function refreshHandle(a) {{
   if (!a) return;
   const n = commentCount(a.dataset.docKey, a.dataset.eltId);
-  const marker = eltMarker(a.dataset.eltId);
+  const ref = formatRefSymbol(a.dataset.eltId);
   if (n > 0) {{
     a.classList.add("has-comments");
-    a.innerHTML = '<span class="count">' + n + '</span> ' + escapeHtml(marker);
+    a.innerHTML = '<span class="count">' + n + '</span> ' + escapeHtml(ref);
     a.title = n + " comment(s) on " + a.dataset.docKey + "/" + a.dataset.eltId;
   }} else {{
     a.classList.remove("has-comments");
-    a.innerHTML = '+ ' + escapeHtml(marker);
+    a.innerHTML = '+ ' + escapeHtml(ref);
     a.title = "Add comment on " + a.dataset.docKey + "/" + a.dataset.eltId;
   }}
 }}
 
-// Symbol for the element within its section (no section number — the handle
-// is positioned next to the element so it's clear which section). For pure
-// section refs the marker is just "§".
-//   p3  → "¶3"     li5 → "•5"     tr2 → "□2"     (section) → "§"
-function eltMarker(eltId) {{
-  const slash = eltId.indexOf("/");
-  if (slash < 0) return "§";
-  const rest = eltId.substring(slash + 1);
-  const m = rest.match(/^(p|li|tr)(\d+)$/);
-  if (!m) return rest;
-  const sym = m[1] === "p" ? "¶" : (m[1] === "li" ? "•" : "□");
-  return sym + m[2];
-}}
-
-// Full ref including section, for the comment-card pill.
+// Symbolic ref including section.
 //   1.2.1            → "§1.2.1"
 //   1.2.1/p3         → "§1.2.1 ¶3"
 //   1.2.1/li5        → "§1.2.1 •5"
