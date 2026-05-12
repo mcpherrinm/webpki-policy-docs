@@ -27,13 +27,13 @@ import urllib.request
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 SRC_DOCS = [
-    ("cabf_br", "CABF BR", "cabf_br.md"),
-    ("mozilla", "Mozilla", "mozilla.md"),
-    ("chrome", "Chrome", "chrome.md"),
-    ("apple", "Apple", "apple.md"),
-    ("microsoft", "Microsoft", "microsoft.md"),
-    ("ccadb", "CCADB", "ccadb.md"),
-    ("letsencrypt_cp_cps", "LE CP/CPS", "letsencrypt_cp_cps.md"),
+    ("cabf_br",            "CABF BR",   "2.2.6",      "cabf_br/2.2.6.md"),
+    ("mozilla",            "Mozilla",   "3.0",        "mozilla/3.0.md"),
+    ("chrome",             "Chrome",    "1.8",        "chrome/1.8.md"),
+    ("apple",              "Apple",     "2023-08-15", "apple/2023-08-15.md"),
+    ("microsoft",          "Microsoft", "1.1",        "microsoft/1.1.md"),
+    ("ccadb",              "CCADB",     "2.0",        "ccadb/2.0.md"),
+    ("letsencrypt_cp_cps", "LE CP/CPS", "6.0",        "letsencrypt_cp_cps/6.0.md"),
 ]
 
 
@@ -445,6 +445,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: var(--muted);
     font-style: italic;
   }}
+  .loaded-set-chip.mismatch {{
+    border-color: var(--warn);
+    background: var(--warn-bg);
+  }}
+  .loaded-set-chip .vmark {{
+    color: var(--warn);
+    font-weight: 600;
+  }}
   .loaded-set-chip .remove-btn {{
     cursor: pointer;
     color: var(--muted);
@@ -471,6 +479,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .doc-title {{
     font-size: 22px;
     margin: 4px 0 2px;
+  }}
+  .doc-title .doc-version {{
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    margin-left: 6px;
   }}
   .doc-meta {{
     color: var(--muted);
@@ -921,25 +935,33 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 "use strict";
 
 // ===== Embedded build-time data =====
-const SRC_DATA   = {src_data_json};
-const SRC_KEYS   = {src_keys_json};
-const SRC_LABELS = {src_labels_json};
-const MANIFEST   = {manifest_json};  // [{{ref, doc, section, kind, ord, title, snippet}}]
+const SRC_DATA     = {src_data_json};
+const SRC_KEYS     = {src_keys_json};
+const SRC_LABELS   = {src_labels_json};
+const SRC_VERSIONS = {src_versions_json};  // {{<docKey>: "<version>"}}
+const MANIFEST     = {manifest_json};  // [{{ref, doc, version, section, kind, ord, title, snippet}}]
+
+function docVersion(docKey) {{ return SRC_VERSIONS[docKey] || ""; }}
 
 // ===== marked.js configuration =====
 marked.setOptions({{ gfm: true, breaks: false }});
 
 // ===== Comment storage (localStorage) =====
 //
-// Schema (current = v2):
-//   webpki-comments::v2::<docKey>::<eltId> → JSON array of comments
+// Schema (current = v3):
+//   webpki-comments::v3::<docKey>::<docVersion>::<eltId> → JSON array of comments
 //     [{{id, text, createdAt, updatedAt}}]
-//   webpki-loaded-sets::v1 → JSON array of {{id, name, source, comments: {{<docKey>/<eltId>: [...] }} }}
+//   webpki-loaded-sets::v1 → JSON array of {{id, name, source, comments: {{<docKey>: {{<eltId>: [...] }} }}, versions: {{<docKey>: <version>}} }}
+//
+// Comments are scoped to a specific document version. Switching to a different
+// version of the same source surfaces a separate set of comments.
 
-const NS = "webpki-comments::v2::";
+const NS = "webpki-comments::v3::";
 const LOADED_SETS_KEY = "webpki-loaded-sets::v1";
 
-function commentsKey(docKey, eltId) {{ return NS + docKey + "::" + eltId; }}
+function commentsKey(docKey, eltId) {{
+  return NS + docKey + "::" + docVersion(docKey) + "::" + eltId;
+}}
 
 function getComments(docKey, eltId) {{
   try {{
@@ -1020,9 +1042,10 @@ function deleteComment(docKey, eltId, commentId) {{
   setComments(docKey, eltId, arr);
 }}
 
+// Returns comments for the currently configured version of `docKey`.
 function allCommentsForDoc(docKey) {{
   const out = {{}};
-  const prefix = NS + docKey + "::";
+  const prefix = NS + docKey + "::" + docVersion(docKey) + "::";
   for (let i = 0; i < localStorage.length; i++) {{
     const k = localStorage.key(i);
     if (k && k.startsWith(prefix)) {{
@@ -1035,23 +1058,18 @@ function allCommentsForDoc(docKey) {{
   return out;
 }}
 
+// Collect comments for every configured doc at its current version.
+// Returns {{ comments: {{<docKey>: {{<eltId>: [...] }}}}, versions: {{<docKey>: "<ver>"}} }}.
 function allCommentsAllDocs() {{
-  const out = {{}};
-  for (let i = 0; i < localStorage.length; i++) {{
-    const k = localStorage.key(i);
-    if (k && k.startsWith(NS)) {{
-      const rest = k.substring(NS.length);
-      const sep = rest.indexOf("::");
-      if (sep < 0) continue;
-      const docKey = rest.substring(0, sep);
-      const eltId = rest.substring(sep + 2);
-      try {{
-        if (!out[docKey]) out[docKey] = {{}};
-        out[docKey][eltId] = JSON.parse(localStorage.getItem(k));
-      }} catch (e) {{}}
-    }}
+  const comments = {{}};
+  const versions = {{}};
+  for (const docKey of SRC_KEYS) {{
+    const c = allCommentsForDoc(docKey);
+    if (Object.keys(c).length === 0) continue;
+    comments[docKey] = c;
+    versions[docKey] = docVersion(docKey);
   }}
-  return out;
+  return {{ comments, versions }};
 }}
 
 // ===== Loaded read-only commentary sets =====
@@ -1072,13 +1090,20 @@ function saveLoadedSetsToStorage() {{
 }}
 
 function normalizeImportedPayload(obj) {{
-  // Accept two shapes:
-  //  v2 export: {{version: 2, comments: {{<docKey>: {{<eltId>: [comments]}}}}}}
-  //  flat:      {{<docKey>: {{<eltId>: [comments or string]}}}}
+  // Accept three shapes:
+  //  v3 export: {{version: 3, doc_versions: {{<docKey>: "<ver>"}}, comments: {{<docKey>: {{<eltId>: [comments]}}}}}}
+  //  v2 export: {{version: 2, comments: {{<docKey>: {{<eltId>: [comments]}}}}}}      (no version stamp)
+  //  flat:      {{<docKey>: {{<eltId>: [comments or string]}}}}                       (no version stamp)
   let src = {{}};
+  let versions = {{}};
   if (obj && typeof obj === "object") {{
-    if (obj.comments && typeof obj.comments === "object") src = obj.comments;
-    else src = obj;
+    if (obj.comments && typeof obj.comments === "object") {{
+      src = obj.comments;
+      if (obj.doc_versions && typeof obj.doc_versions === "object") versions = obj.doc_versions;
+      else if (obj.versions && typeof obj.versions === "object") versions = obj.versions;
+    }} else {{
+      src = obj;
+    }}
   }}
   const clean = {{}};
   for (const docKey of Object.keys(src)) {{
@@ -1094,7 +1119,7 @@ function normalizeImportedPayload(obj) {{
       }}
     }}
   }}
-  return clean;
+  return {{ comments: clean, versions }};
 }}
 
 function deriveSetName(source) {{
@@ -1108,9 +1133,13 @@ function deriveSetName(source) {{
 }}
 
 function addLoadedSet(name, payload, source) {{
-  const comments = normalizeImportedPayload(payload);
+  const norm = normalizeImportedPayload(payload);
   const id = "set-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 5);
-  LOADED_SETS.push({{ id, name, source: source || "", comments }});
+  LOADED_SETS.push({{
+    id, name, source: source || "",
+    comments: norm.comments,
+    versions: norm.versions,
+  }});
   saveLoadedSetsToStorage();
   applySideCountVars();
   renderLoadedSetsBar();
@@ -1148,12 +1177,21 @@ function renderLoadedSetsBar() {{
   h += '<span class="loaded-set-chip local">Local (editable)</span>';
   for (const s of LOADED_SETS) {{
     let count = 0;
+    const mismatches = [];
+    const versions = s.versions || {{}};
     for (const dk of Object.keys(s.comments)) {{
       for (const eid of Object.keys(s.comments[dk])) count += s.comments[dk][eid].length;
+      const setVer = versions[dk];
+      const curVer = docVersion(dk);
+      if (setVer && curVer && setVer !== curVer) {{
+        mismatches.push(dk + " v" + setVer + " ≠ v" + curVer);
+      }}
     }}
-    const title = count + " comment(s)" + (s.source ? " from " + s.source : "");
-    h += '<span class="loaded-set-chip" title="' + escapeAttr(title) + '">' +
+    let title = count + " comment(s)" + (s.source ? " from " + s.source : "");
+    if (mismatches.length) title += "\nVersion mismatch: " + mismatches.join("; ");
+    h += '<span class="loaded-set-chip' + (mismatches.length ? ' mismatch' : '') + '" title="' + escapeAttr(title) + '">' +
          escapeHtml(s.name) +
+         (mismatches.length ? ' <span class="vmark" aria-hidden="true">⚠</span>' : '') +
          ' <button class="remove-btn" data-remove-set="' + escapeAttr(s.id) + '">×</button></span>';
   }}
   bar.innerHTML = h;
@@ -1240,7 +1278,8 @@ function renderDocPage(docKey) {{
   page.className = "doc-page";
   page.dataset.docKey = docKey;
   page.innerHTML =
-    '<h1 class="doc-title">' + escapeHtml(SRC_LABELS[docKey]) + '</h1>' +
+    '<h1 class="doc-title">' + escapeHtml(SRC_LABELS[docKey]) +
+    ' <span class="doc-version">v' + escapeHtml(doc.version || "") + '</span></h1>' +
     '<div class="doc-meta">Rendered from ' + escapeHtml(doc.filename) +
     ' · ' + (doc.section_count || 0) + ' sections · ' + (doc.elt_count || 0) + ' commentable elements · ' +
     'Refs look like <code>' + escapeHtml(docKey) + '/&lt;section&gt;</code> or ' +
@@ -2099,10 +2138,12 @@ document.addEventListener("input", (e) => {{
 
 // ===== Export / Import =====
 document.getElementById("exportBtn").addEventListener("click", () => {{
+  const snapshot = allCommentsAllDocs();
   const data = {{
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
-    comments: allCommentsAllDocs(),
+    doc_versions: snapshot.versions,
+    comments: snapshot.comments,
   }};
   const blob = new Blob([JSON.stringify(data, null, 2)], {{ type: "application/json" }});
   const url = URL.createObjectURL(blob);
@@ -2217,7 +2258,7 @@ navigateHash();
 # Build pipeline
 # ---------------------------------------------------------------------------
 
-def build_manifest_entries(parsed, doc_key):
+def build_manifest_entries(parsed, doc_key, version):
     """Flatten a parsed doc into manifest rows: one row per commentable element + each section itself."""
     rows = []
     # preamble elements (no section heading yet)
@@ -2225,6 +2266,7 @@ def build_manifest_entries(parsed, doc_key):
         rows.append({
             "ref": f"{doc_key}/{el['id']}",
             "doc": doc_key,
+            "version": version,
             "section": "_preamble",
             "title": "(preamble)",
             "kind": el["kind"],
@@ -2236,6 +2278,7 @@ def build_manifest_entries(parsed, doc_key):
         rows.append({
             "ref": f"{doc_key}/{sec['id']}",
             "doc": doc_key,
+            "version": version,
             "section": sec["id"],
             "title": sec["title"],
             "kind": "section",
@@ -2246,6 +2289,7 @@ def build_manifest_entries(parsed, doc_key):
             rows.append({
                 "ref": f"{doc_key}/{el['id']}",
                 "doc": doc_key,
+                "version": version,
                 "section": sec["id"],
                 "title": sec["title"],
                 "kind": el["kind"],
@@ -2258,12 +2302,12 @@ def build_manifest_entries(parsed, doc_key):
 def main():
     src_data = {}
     manifest = []
-    for key, label, path in SRC_DOCS:
+    for key, label, version, path in SRC_DOCS:
         full = os.path.join(ROOT, path)
         with open(full, "r", encoding="utf-8") as f:
             raw = f.read()
         parsed = parse_doc(raw)
-        rows = build_manifest_entries(parsed, key)
+        rows = build_manifest_entries(parsed, key, version)
         manifest.extend(rows)
         # collect id lists for cross-reference validity in JS
         section_ids = [s["id"] for s in parsed["sections"]]
@@ -2275,6 +2319,7 @@ def main():
             elt_ids.append(el["id"])
         src_data[key] = {
             "label": label,
+            "version": version,
             "filename": path,
             "raw": raw,
             "title": parsed["title"],
@@ -2284,17 +2329,19 @@ def main():
             "elt_ids": elt_ids,
         }
 
-    src_keys = [k for k, _, _ in SRC_DOCS]
-    src_labels = {k: lbl for k, lbl, _ in SRC_DOCS}
+    src_keys = [k for k, _, _, _ in SRC_DOCS]
+    src_labels = {k: lbl for k, lbl, _, _ in SRC_DOCS}
+    src_versions = {k: ver for k, _, ver, _ in SRC_DOCS}
 
     src_data_json = json.dumps(src_data, ensure_ascii=False)
     src_keys_json = json.dumps(src_keys)
     src_labels_json = json.dumps(src_labels)
+    src_versions_json = json.dumps(src_versions)
     manifest_json = json.dumps(manifest, ensure_ascii=False)
 
     src_nav = "".join(
-        f'<button class="navbtn" data-doc="{html.escape(k)}" title="Refs: {html.escape(k)}/&lt;section&gt;">{html.escape(lbl)}</button>'
-        for k, lbl, _ in SRC_DOCS
+        f'<button class="navbtn" data-doc="{html.escape(k)}" title="Refs: {html.escape(k)}/&lt;section&gt; (v{html.escape(ver)})">{html.escape(lbl)}</button>'
+        for k, lbl, ver, _ in SRC_DOCS
     )
 
     marked_js = load_marked_js()
@@ -2304,6 +2351,7 @@ def main():
         src_data_json=src_data_json,
         src_keys_json=src_keys_json,
         src_labels_json=src_labels_json,
+        src_versions_json=src_versions_json,
         manifest_json=manifest_json,
         src_nav=src_nav,
     )
@@ -2314,7 +2362,11 @@ def main():
 
     out_manifest = os.path.join(ROOT, "id-manifest.json")
     with open(out_manifest, "w", encoding="utf-8") as f:
-        json.dump({"version": 1, "entries": manifest}, f, ensure_ascii=False, indent=2)
+        json.dump({
+            "version": 2,
+            "doc_versions": src_versions,
+            "entries": manifest,
+        }, f, ensure_ascii=False, indent=2)
 
     sys.stderr.write(
         f"Wrote {out_html} ({os.path.getsize(out_html):,} bytes), "
