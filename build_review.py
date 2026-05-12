@@ -7,7 +7,10 @@ Workflow:
   2. Initializes every element to status "na" with a default note.
   3. Layers per-doc overrides defined in review_overrides/*.py.
      Each override module exports OVERRIDES = {<doc_key>: {<eltId>: {status, text}}}.
-  4. Writes review_boulder.json in v3 import shape.
+  4. Section-level dedup: where every child of a section ends up with the
+     same (status, text), collapse them to a single comment on the section
+     header.
+  5. Writes review_boulder.json in v3 import shape.
 
 Run:
   python3 build_review.py
@@ -82,13 +85,67 @@ def main():
                     overrides_total += 1
             print(f"Loaded {f.name}: {sum(len(v) for v in ov.values())} entries")
 
+    # Section-level dedup. When every child of a section ends up with the
+    # same (status, text) we collapse the children. Three safe cases:
+    #   (a) section header matches the shared child text → just drop
+    #       children (section keeps its existing comment).
+    #   (b) section header is the default na placeholder → promote the
+    #       children's shared comment up to the section header and drop
+    #       children.
+    #   (c) children are all the default na placeholder while the section
+    #       header has a different (more informative) comment → drop the
+    #       noisy placeholder children and keep the section header as-is.
+    # Anything else (section + children both non-default but different)
+    # is left alone, since both are intentional.
+    DEFAULT_TUPLE = ("na", DEFAULT_NA_TEXT)
+    dedup_removed = 0
+    for doc_key, by_elt in comments.items():
+        # Group every <sec>/<...> elt under its containing section.
+        section_children = {}
+        for eid in list(by_elt.keys()):
+            if "/" not in eid:
+                continue
+            sec = eid.split("/", 1)[0]
+            section_children.setdefault(sec, []).append(eid)
+
+        for sec_id, child_ids in section_children.items():
+            if not child_ids:
+                continue
+            child_comments = [by_elt[c][0] for c in child_ids]
+            first = (child_comments[0]["status"], child_comments[0]["text"])
+            if not all((c["status"], c["text"]) == first for c in child_comments):
+                continue
+            sec_list = by_elt.get(sec_id)
+            if not sec_list:
+                continue
+            sec_comment = sec_list[0]
+            sec_tuple = (sec_comment["status"], sec_comment["text"])
+
+            if sec_tuple == first:
+                new_sec_tuple = first
+            elif sec_tuple == DEFAULT_TUPLE and first != DEFAULT_TUPLE:
+                new_sec_tuple = first
+            elif first == DEFAULT_TUPLE and sec_tuple != DEFAULT_TUPLE:
+                new_sec_tuple = sec_tuple
+            else:
+                continue
+
+            sec_comment["status"], sec_comment["text"] = new_sec_tuple
+            for c in child_ids:
+                del by_elt[c]
+                dedup_removed += 1
+
     payload = {
         "version": 3,
         "doc_versions": doc_versions,
         "comments": comments,
     }
     OUT.write_text(json.dumps(payload, indent=2))
-    print(f"Wrote {OUT} ({sum(len(v) for v in comments.values())} entries, {overrides_total} overrides)")
+    total_entries = sum(len(v) for v in comments.values())
+    print(
+        f"Wrote {OUT} ({total_entries} entries after dedup, "
+        f"{overrides_total} overrides, {dedup_removed} entries collapsed)"
+    )
 
 
 if __name__ == "__main__":
