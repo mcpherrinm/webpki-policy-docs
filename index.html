@@ -1097,7 +1097,16 @@ function splitMarkdownAtHeadings(md) {
       continue;
     }
     const s = line.trimStart();
-    if (s.startsWith("```") || s.startsWith("~~~")) inCode = !inCode;
+    if (s.startsWith("```") || s.startsWith("~~~")) {
+      // CommonMark §4.5: a backtick-fence info string MAY NOT contain
+      // backticks, so `` ```code``` `` on one line is an inline code span
+      // on a paragraph line, not a fence opener. (marked.js renders it
+      // the same way.) Skip the inCode toggle for that case — otherwise
+      // every heading after the line would be sucked into this chunk.
+      if (!(s[0] === "`" && s.slice(3).includes("`"))) {
+        inCode = !inCode;
+      }
+    }
     if (!inCode) {
       const m = line.match(/^(#{1,6})\s+(.+?)\s*$/);
       if (m) {
