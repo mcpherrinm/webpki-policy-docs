@@ -43,7 +43,7 @@ SRC_DOCS = [
     ("apple",              "Apple",     "2023-08-15", "apple/2023-08-15.md"),
     ("microsoft",          "Microsoft", "1.1",        "microsoft/1.1.md"),
     ("ccadb",              "CCADB",     "2.0",        "ccadb/2.0.md"),
-    ("letsencrypt_cp_cps", "LE CP/CPS", "6.0",        "letsencrypt_cp_cps/6.0.md"),
+    ("letsencrypt_cp_cps", "LE CP/CPS", "6.1",        "letsencrypt_cp_cps/6.1.md"),
 ]
 
 
