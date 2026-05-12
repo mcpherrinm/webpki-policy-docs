@@ -10,8 +10,10 @@ Features:
     each parsed into individual numbered requirements with clickable citation chips.
   - Click a citation in a requirement → scroll to that section in the source doc.
   - Each source section heading shows a "Cited by N" badge linking back to derived requirements.
-  - Per-requirement notes persisted in browser localStorage.
-  - Import/Export notes as JSON.
+  - Per-requirement notes persisted in browser localStorage (always-visible side column).
+  - Per-requirement review status: unset / reviewed / needs info / noncompliant.
+  - Filter bar with status counts; click counts to show/hide requirements in that state.
+  - Import/Export notes + statuses as JSON.
 
 Output: writes index.html to the project root.
 """
@@ -63,16 +65,13 @@ def parse_citations(text):
     cits = []
     for m in re.finditer(r"\[([^\]]+)\]", text):
         inner = m.group(1)
-        # Multiple citations in one bracket are separated by ';'
         for seg in inner.split(";"):
             seg = seg.strip()
             for src, key in CITATION_SRC_TO_KEY.items():
                 if seg.startswith(src + " ") or seg == src or seg.startswith(src + " §"):
                     rest = seg[len(src):].strip()
-                    # Capture optional parenthetical hint (e.g. "(Root CA profile)")
                     pm = re.search(r"\(([^)]+)\)", rest)
                     paren = pm.group(1) if pm else ""
-                    # Section numbers look like §X[.Y[.Z]] — capture all of them
                     secs = re.findall(r"§([0-9]+(?:\.[0-9]+)*)", rest)
                     if secs:
                         for s in secs:
@@ -95,8 +94,8 @@ def parse_requirement_doc(path):
     """
     text = open(path).read()
     out = []
-    section_stack = []   # current heading path
-    section_anchors = [] # parallel: anchor for each stack level
+    section_stack = []
+    section_anchors = []
     in_code = False
     last_section_anchor = "top"
 
@@ -111,7 +110,6 @@ def parse_requirement_doc(path):
             depth = len(m.group(1))
             label = m.group(2).strip()
             section_stack = section_stack[: depth - 1] + [label]
-            # Anchor: prefer leading section number like "1.6.3" → "1-6-3"
             num = re.match(r"^(\d+(?:\.\d+)*)\s", label)
             if num:
                 anchor = num.group(1).replace(".", "-")
@@ -133,12 +131,8 @@ def parse_requirement_doc(path):
                 "text": body,
                 "citations": citations,
             })
-    # Assign unique IDs that include the section to disambiguate (two sections may both
-    # have "item 1" — section_anchor + item makes the ID unique).
     for it in out:
-        # Document-scoped item id: <section_anchor>.<item>
         it["item_id"] = f"{it['section_anchor']}.{it['item']}"
-    # Document key is set by caller.
     return out
 
 
@@ -151,18 +145,14 @@ def build_reverse_index(req_docs):
                 if c["sec"]:
                     anchor = "sec-" + c["sec"].replace(".", "-")
                     key = f"{c['doc']}#{anchor}"
-                    target = f"{req_doc_key}::{it['item_id']}"
-                    reverse.setdefault(key, []).append(target)
                 else:
-                    # citation with no section number — link to top of doc
                     key = f"{c['doc']}#top"
-                    target = f"{req_doc_key}::{it['item_id']}"
-                    reverse.setdefault(key, []).append(target)
+                target = f"{req_doc_key}::{it['item_id']}"
+                reverse.setdefault(key, []).append(target)
     return reverse
 
 
 def load_marked_js():
-    """Return the marked.min.js source, downloading if needed."""
     local = os.path.join(ROOT, "build", "marked.min.js")
     os.makedirs(os.path.dirname(local), exist_ok=True)
     if not os.path.exists(local):
@@ -173,58 +163,6 @@ def load_marked_js():
         with open(local, "wb") as f:
             f.write(data)
     return open(local, "rb").read().decode("utf-8")
-
-
-def build_html():
-    # Source docs: raw markdown for browser-side rendering
-    src_data = {}
-    for key, label, path in SRC_DOCS:
-        with open(os.path.join(ROOT, path), "r", encoding="utf-8") as f:
-            src_data[key] = {"label": label, "filename": path, "raw": f.read()}
-
-    # Requirement docs: parsed structured items
-    req_data = {}
-    for key, label, path in REQ_DOCS:
-        items = parse_requirement_doc(os.path.join(ROOT, path))
-        with open(os.path.join(ROOT, path), "r", encoding="utf-8") as f:
-            raw = f.read()
-        req_data[key] = {
-            "label": label,
-            "filename": path,
-            "raw": raw,
-            "items": items,
-        }
-
-    reverse_index = build_reverse_index(req_data)
-
-    marked_js = load_marked_js()
-
-    # Build the page
-    src_data_json = json.dumps(src_data, ensure_ascii=False)
-    req_data_json = json.dumps(req_data, ensure_ascii=False)
-    reverse_json = json.dumps(reverse_index, ensure_ascii=False)
-
-    src_nav = "".join(
-        f'<button class="navbtn src" data-kind="src" data-doc="{html.escape(k)}">{html.escape(lbl)}</button>'
-        for k, lbl, _ in SRC_DOCS
-    )
-    req_nav = "".join(
-        f'<button class="navbtn req" data-kind="req" data-doc="{html.escape(k)}">{html.escape(lbl)}</button>'
-        for k, lbl, _ in REQ_DOCS
-    )
-
-    html_template = HTML_TEMPLATE.format(
-        marked_js=marked_js,
-        src_data_json=src_data_json,
-        req_data_json=req_data_json,
-        reverse_json=reverse_json,
-        src_nav=src_nav,
-        req_nav=req_nav,
-    )
-    out_path = os.path.join(ROOT, "index.html")
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(html_template)
-    sys.stderr.write(f"Wrote {out_path} ({os.path.getsize(out_path)} bytes)\n")
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -249,6 +187,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     --code-bg: #efece4;
     --note-bg: #fffceb;
     --note-border: #e1dbb6;
+    --ok: #2e7d32;
+    --ok-bg: #e6f3e6;
+    --info: #c08400;
+    --info-bg: #fff0c8;
+    --bad: #c62828;
+    --bad-bg: #fbe4e4;
+    --unset: #888;
+    --unset-bg: #ececec;
   }}
   * {{ box-sizing: border-box; }}
   body {{
@@ -323,7 +269,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }}
   main {{
     padding: 20px 24px 80px;
-    max-width: 1100px;
+    max-width: 1280px;
     margin: 0 auto;
   }}
   /* Requirement view */
@@ -331,7 +277,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .req-page .doc-intro {{
     color: var(--muted);
     font-size: 13px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }}
   .req-page h2.section {{
     font-size: 14px;
@@ -343,17 +289,98 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     padding-bottom: 4px;
     border-bottom: 1px solid var(--border);
   }}
+  /* Status filter bar (sticky-ish under header) */
+  .status-filter {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0 18px 0;
+    padding: 8px 12px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12.5px;
+  }}
+  .status-filter .label {{
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+  }}
+  .filter-chip {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    user-select: none;
+  }}
+  .filter-chip:hover {{ filter: brightness(0.96); }}
+  .filter-chip.inactive {{
+    opacity: 0.4;
+    text-decoration: line-through;
+    background: #f6f6f6;
+  }}
+  .filter-chip .swatch {{
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    background: #888;
+    flex: none;
+  }}
+  .filter-chip.reviewed .swatch {{ background: var(--ok); }}
+  .filter-chip.needs-info .swatch {{ background: var(--info); }}
+  .filter-chip.noncompliant .swatch {{ background: var(--bad); }}
+  .filter-chip.unset .swatch {{ background: var(--unset); }}
+  .filter-chip .count {{
+    font-weight: 600;
+    background: rgba(0,0,0,0.06);
+    border-radius: 9px;
+    padding: 0 6px;
+    font-size: 11px;
+    min-width: 18px;
+    text-align: center;
+  }}
+  .filter-toolbtn {{
+    margin-left: auto;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+  }}
+  .filter-toolbtn:hover {{ background: var(--accent-bg); color: var(--fg); }}
+
+  /* Requirement card: two-column grid (requirement | notes) */
   .req-card {{
     background: white;
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px 14px;
     margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 18px;
+    border-left-width: 4px;
   }}
+  .req-card.status-unset {{ border-left-color: var(--unset); }}
+  .req-card.status-reviewed {{ border-left-color: var(--ok); }}
+  .req-card.status-needs-info {{ border-left-color: var(--info); }}
+  .req-card.status-noncompliant {{ border-left-color: var(--bad); }}
   .req-card.active {{
-    border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent-bg);
   }}
+  .req-card.hidden {{ display: none; }}
+  .req-main {{ min-width: 0; }}
   .req-card .num {{
     color: var(--muted);
     font-size: 12px;
@@ -391,41 +418,68 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: white;
   }}
   .cite-chip .src-name {{ font-weight: 600; }}
-  .note-toggle {{
-    background: none;
-    border: none;
-    color: var(--muted);
+
+  /* Status buttons under each requirement */
+  .req-status-row {{
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }}
+  .status-btn {{
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--fg);
+    padding: 3px 10px;
+    border-radius: 12px;
     font-size: 11px;
     cursor: pointer;
-    padding: 0;
-    margin: 0;
+    font-family: inherit;
+    user-select: none;
   }}
-  .note-toggle:hover {{ color: var(--accent); }}
-  .note-toggle.has-note {{ color: var(--warn); font-weight: 600; }}
-  .note-area {{
-    margin-top: 6px;
-    background: var(--note-bg);
+  .status-btn:hover {{ background: var(--accent-bg); }}
+  .status-btn.active.unset {{ background: var(--unset-bg); border-color: var(--unset); color: #555; }}
+  .status-btn.active.reviewed {{ background: var(--ok); color: white; border-color: var(--ok); }}
+  .status-btn.active.needs-info {{ background: var(--info); color: white; border-color: var(--info); }}
+  .status-btn.active.noncompliant {{ background: var(--bad); color: white; border-color: var(--bad); }}
+
+  /* Notes column */
+  .req-side {{
+    border-left: 1px solid var(--border);
+    padding-left: 14px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }}
+  .req-side .notes-label {{
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }}
+  .req-side textarea {{
+    width: 100%;
+    flex: 1;
+    min-height: 90px;
     border: 1px solid var(--note-border);
+    background: var(--note-bg);
     border-radius: 4px;
     padding: 6px 8px;
-  }}
-  .note-area textarea {{
-    width: 100%;
-    min-height: 50px;
-    border: none;
-    background: transparent;
     font: inherit;
     font-size: 13px;
     resize: vertical;
     outline: none;
   }}
-  .note-area .meta {{
+  .req-side textarea:focus {{ border-color: var(--accent); }}
+  .req-side .meta {{
     font-size: 10px;
     color: var(--muted);
     margin-top: 4px;
     display: flex;
     justify-content: space-between;
   }}
+
   /* Source view */
   .src-page h1 {{ font-size: 22px; margin-top: 8px; }}
   .src-page .doc-intro {{
@@ -556,6 +610,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .search-hit a {{ color: var(--link); text-decoration: none; font-weight: 600; }}
   .search-hit .ctx {{ color: var(--muted); }}
   mark {{ background: #ffe88a; padding: 0 1px; }}
+
+  @media (max-width: 900px) {{
+    .req-card {{ grid-template-columns: 1fr; }}
+    .req-side {{
+      border-left: none;
+      border-top: 1px solid var(--border);
+      padding-left: 0;
+      padding-top: 10px;
+    }}
+  }}
 </style>
 </head>
 <body>
@@ -569,9 +633,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     {src_nav}
     <div class="controls">
       <input id="search" type="search" placeholder="Search (Enter to run)…">
-      <button id="exportBtn" title="Download all notes as JSON">Export notes</button>
+      <button id="exportBtn" title="Download all notes + statuses as JSON">Export</button>
       <label>
-        Import notes
+        Import
         <input id="importInput" type="file" accept="application/json" style="display:none">
       </label>
     </div>
@@ -598,21 +662,31 @@ const REQ_LABELS = {{
 {req_label_map}
 }};
 
+const STATUS_OPTIONS = [
+  {{ value: "unset",         label: "Unset" }},
+  {{ value: "reviewed",      label: "Reviewed" }},
+  {{ value: "needs-info",    label: "Needs info" }},
+  {{ value: "noncompliant",  label: "Noncompliant" }}
+];
+
 // === marked.js configuration ===
 marked.setOptions({{ gfm: true, breaks: false }});
 
-// === Notes (localStorage) ===
+// === Notes + statuses (localStorage) ===
 const NOTE_KEY_PREFIX = "webpki-policy-notes::v1::";
+const STATUS_KEY_PREFIX = "webpki-policy-status::v1::";
 
 function noteKey(reqDocKey, itemId) {{
   return NOTE_KEY_PREFIX + reqDocKey + "::" + itemId;
+}}
+function statusKey(reqDocKey, itemId) {{
+  return STATUS_KEY_PREFIX + reqDocKey + "::" + itemId;
 }}
 
 function getNote(reqDocKey, itemId) {{
   try {{ return localStorage.getItem(noteKey(reqDocKey, itemId)) || ""; }}
   catch (e) {{ return ""; }}
 }}
-
 function setNote(reqDocKey, itemId, text) {{
   try {{
     if (text.trim() === "") {{
@@ -623,37 +697,81 @@ function setNote(reqDocKey, itemId, text) {{
   }} catch (e) {{ console.error(e); }}
 }}
 
-function allNotes() {{
+function getStatus(reqDocKey, itemId) {{
+  try {{ return localStorage.getItem(statusKey(reqDocKey, itemId)) || "unset"; }}
+  catch (e) {{ return "unset"; }}
+}}
+function setStatusValue(reqDocKey, itemId, value) {{
+  try {{
+    if (!value || value === "unset") {{
+      localStorage.removeItem(statusKey(reqDocKey, itemId));
+    }} else {{
+      localStorage.setItem(statusKey(reqDocKey, itemId), value);
+    }}
+  }} catch (e) {{ console.error(e); }}
+}}
+
+function allByPrefix(prefix) {{
   const out = {{}};
   for (let i = 0; i < localStorage.length; i++) {{
     const k = localStorage.key(i);
-    if (k && k.startsWith(NOTE_KEY_PREFIX)) {{
-      const rest = k.substring(NOTE_KEY_PREFIX.length);
-      out[rest] = localStorage.getItem(k);
+    if (k && k.startsWith(prefix)) {{
+      out[k.substring(prefix.length)] = localStorage.getItem(k);
     }}
   }}
   return out;
 }}
+function allNotes() {{ return allByPrefix(NOTE_KEY_PREFIX); }}
+function allStatuses() {{ return allByPrefix(STATUS_KEY_PREFIX); }}
 
-function importNotesObject(obj, mode) {{
-  // mode: 'merge' adds notes, 'replace' clears existing first
+function importExportPayload(obj, mode) {{
+  // Accept either a wrapped object with "notes" and "statuses" keys,
+  // or a legacy flat map of "docKey::itemId" -> note text.
+  let notes = {{}};
+  let statuses = {{}};
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {{
+    if (obj.notes && typeof obj.notes === "object") notes = obj.notes;
+    if (obj.statuses && typeof obj.statuses === "object") statuses = obj.statuses;
+    if (!obj.notes && !obj.statuses) {{
+      // Treat as legacy flat-notes object
+      notes = obj;
+    }}
+  }}
+
   if (mode === "replace") {{
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {{
       const k = localStorage.key(i);
-      if (k && k.startsWith(NOTE_KEY_PREFIX)) keys.push(k);
+      if (k && (k.startsWith(NOTE_KEY_PREFIX) || k.startsWith(STATUS_KEY_PREFIX))) keys.push(k);
     }}
     keys.forEach((k) => localStorage.removeItem(k));
   }}
-  let count = 0;
-  for (const composite of Object.keys(obj)) {{
-    const v = obj[composite];
-    if (typeof v !== "string") continue;
-    if (v.trim() === "") continue;
+
+  let nCount = 0;
+  for (const composite of Object.keys(notes)) {{
+    const v = notes[composite];
+    if (typeof v !== "string" || v.trim() === "") continue;
     localStorage.setItem(NOTE_KEY_PREFIX + composite, v);
-    count++;
+    nCount++;
   }}
-  return count;
+  let sCount = 0;
+  for (const composite of Object.keys(statuses)) {{
+    const v = statuses[composite];
+    if (typeof v !== "string" || !v || v === "unset") continue;
+    if (!STATUS_OPTIONS.some((o) => o.value === v)) continue;
+    localStorage.setItem(STATUS_KEY_PREFIX + composite, v);
+    sCount++;
+  }}
+  return {{ notes: nCount, statuses: sCount }};
+}}
+
+// === Filter state (in-memory, per session) ===
+const FILTER_STATE = {{}};
+function getFilterState(key) {{
+  if (!FILTER_STATE[key]) {{
+    FILTER_STATE[key] = new Set(STATUS_OPTIONS.map((o) => o.value));
+  }}
+  return FILTER_STATE[key];
 }}
 
 // === Rendering helpers ===
@@ -663,7 +781,6 @@ function escapeHtml(s) {{
 }}
 
 function inlineMarkdownToHtml(s) {{
-  // Render inline markdown (no block elements). marked.parseInline()
   return marked.parseInline(s);
 }}
 
@@ -688,6 +805,44 @@ function reqAnchor(reqDocKey, item) {{
   return "req/" + reqDocKey + "/" + item.item_id;
 }}
 
+function computeStatusCounts(reqDocKey) {{
+  const counts = {{}};
+  for (const opt of STATUS_OPTIONS) counts[opt.value] = 0;
+  for (const it of REQ_DATA[reqDocKey].items) {{
+    const s = getStatus(reqDocKey, it.item_id);
+    counts[s] = (counts[s] || 0) + 1;
+  }}
+  return counts;
+}}
+
+function renderStatusFilter(reqDocKey) {{
+  const counts = computeStatusCounts(reqDocKey);
+  const filter = getFilterState(reqDocKey);
+  let html = '<div class="status-filter" data-doc="' + escapeHtml(reqDocKey) + '">';
+  html += '<span class="label">Status:</span>';
+  for (const opt of STATUS_OPTIONS) {{
+    const active = filter.has(opt.value);
+    html += '<span class="filter-chip ' + opt.value + (active ? '' : ' inactive') + '" data-filter="' + opt.value + '" title="Click to show/hide ' + escapeHtml(opt.label) + ' requirements">' +
+            '<span class="swatch"></span>' + escapeHtml(opt.label) +
+            ' <span class="count">' + counts[opt.value] + '</span></span>';
+  }}
+  html += '<button class="filter-toolbtn" data-filter-action="show-all" title="Show all">Show all</button>';
+  html += '<button class="filter-toolbtn" data-filter-action="only-unset" title="Show only unset">Only unset</button>';
+  html += '</div>';
+  return html;
+}}
+
+function statusButtonsHtml(currentStatus) {{
+  let html = '<div class="req-status-row" role="group" aria-label="Review status">';
+  for (const opt of STATUS_OPTIONS) {{
+    const active = currentStatus === opt.value;
+    html += '<button class="status-btn ' + opt.value + (active ? ' active' : '') + '" data-status-value="' + opt.value + '">' +
+            escapeHtml(opt.label) + '</button>';
+  }}
+  html += '</div>';
+  return html;
+}}
+
 // === Page renderers ===
 
 function renderRequirementPage(key) {{
@@ -695,7 +850,10 @@ function renderRequirementPage(key) {{
   const container = document.createElement("div");
   container.className = "req-page";
   container.innerHTML = '<h1>' + escapeHtml(doc.label) + ' — Requirements</h1>' +
-    '<div class="doc-intro">' + escapeHtml(doc.items.length + " numbered requirements parsed from " + doc.filename + ".") + '</div>';
+    '<div class="doc-intro">' + escapeHtml(doc.items.length + " numbered requirements parsed from " + doc.filename + ". Notes + status are saved in your browser.") + '</div>' +
+    renderStatusFilter(key);
+
+  const filter = getFilterState(key);
 
   let lastSection = null;
   for (const it of doc.items) {{
@@ -706,20 +864,27 @@ function renderRequirementPage(key) {{
       container.appendChild(h);
       lastSection = it.section_path;
     }}
-    const card = document.createElement("div");
-    card.className = "req-card";
-    card.id = reqAnchor(key, it);
     const note = getNote(key, it.item_id);
+    const status = getStatus(key, it.item_id);
+    const card = document.createElement("div");
+    card.className = "req-card status-" + status;
+    if (!filter.has(status)) card.classList.add("hidden");
+    card.id = reqAnchor(key, it);
+    card.dataset.status = status;
+    card.dataset.reqDoc = key;
+    card.dataset.itemId = it.item_id;
+
     card.innerHTML =
-      '<div class="num">#' + it.item_id + '</div>' +
-      '<div class="text">' + inlineMarkdownToHtml(it.text) + '</div>' +
-      renderCitations(it.citations) +
-      '<button class="note-toggle ' + (note ? "has-note" : "") + '" data-req="' + escapeHtml(it.item_id) + '">' +
-        (note ? "📝 Note (saved)" : "+ Add note") +
-      '</button>' +
-      '<div class="note-area" style="display:' + (note ? "block" : "none") + '" data-area="' + escapeHtml(it.item_id) + '">' +
+      '<div class="req-main">' +
+        '<div class="num">#' + escapeHtml(it.item_id) + '</div>' +
+        '<div class="text">' + inlineMarkdownToHtml(it.text) + '</div>' +
+        renderCitations(it.citations) +
+        statusButtonsHtml(status) +
+      '</div>' +
+      '<div class="req-side">' +
+        '<div class="notes-label">Notes</div>' +
         '<textarea data-note="' + escapeHtml(it.item_id) + '" placeholder="Notes for this requirement…">' + escapeHtml(note) + '</textarea>' +
-        '<div class="meta"><span class="save-status"></span><span style="font-family:monospace">' + escapeHtml(key + "::" + it.item_id) + '</span></div>' +
+        '<div class="meta"><span class="save-status"></span><span style="font-family:monospace;opacity:0.65">' + escapeHtml(key + "::" + it.item_id) + '</span></div>' +
       '</div>';
     container.appendChild(card);
   }}
@@ -745,7 +910,6 @@ function renderSourcePage(key) {{
   body.innerHTML = marked.parse(doc.raw);
   container.appendChild(body);
 
-  // Post-process: add anchors, "cited-by" badges, build TOC.
   const toc = tocBox.querySelector("#toc-" + key);
   body.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((h) => {{
     const text = h.textContent.trim();
@@ -758,7 +922,6 @@ function renderSourcePage(key) {{
     }}
     h.id = anchor;
     h.classList.add("src-section");
-    // Add "cited by" badge
     const fullKey = key + "#" + anchor;
     const citingReqs = REVERSE[fullKey];
     if (citingReqs && citingReqs.length > 0) {{
@@ -768,7 +931,6 @@ function renderSourcePage(key) {{
       badge.dataset.fullkey = fullKey;
       h.appendChild(badge);
     }}
-    // TOC entry
     const link = document.createElement("a");
     link.href = "#src/" + key + "/" + anchor;
     link.textContent = text.replace(/Cited by \d+/, "").trim();
@@ -801,11 +963,6 @@ function navigateHash() {{
     return;
   }}
   const parts = hash.split("/");
-  // forms:
-  //   req/<key>                    → show requirement doc
-  //   req/<key>/<item_id>           → show requirement doc, scroll to item
-  //   src/<key>                    → show source doc
-  //   src/<key>/<anchor>            → show source doc, scroll to anchor
   if (parts[0] === "req") {{
     activate("req", parts[1]);
     if (parts[2]) {{
@@ -813,6 +970,8 @@ function navigateHash() {{
       setTimeout(() => {{
         const el = document.getElementById("req/" + parts[1] + "/" + itemId);
         if (el) {{
+          // If the card is hidden by a filter, temporarily reveal it.
+          if (el.classList.contains("hidden")) el.classList.remove("hidden");
           el.scrollIntoView({{ behavior: "smooth", block: "center" }});
           el.classList.add("flash");
         }}
@@ -847,24 +1006,76 @@ document.addEventListener("click", (e) => {{
     window.location.hash = "#" + kind + "/" + doc;
     return;
   }}
-  // Note toggle button
-  const toggle = e.target.closest(".note-toggle");
-  if (toggle) {{
-    const reqId = toggle.dataset.req;
-    const area = document.querySelector('.note-area[data-area="' + reqId + '"]');
-    if (area) {{
-      const shown = area.style.display !== "none";
-      area.style.display = shown ? "none" : "block";
-      if (!shown) area.querySelector("textarea").focus();
-    }}
+
+  // Status button on a req card
+  const statusBtn = e.target.closest(".status-btn");
+  if (statusBtn) {{
+    const card = statusBtn.closest(".req-card");
+    if (!card) return;
+    const newValue = statusBtn.dataset.statusValue;
+    const reqDoc = card.dataset.reqDoc;
+    const itemId = card.dataset.itemId;
+    setStatusValue(reqDoc, itemId, newValue);
+    card.dataset.status = newValue;
+    // Replace status-* class
+    for (const opt of STATUS_OPTIONS) card.classList.remove("status-" + opt.value);
+    card.classList.add("status-" + newValue);
+    // Toggle active state on the buttons within this row
+    card.querySelectorAll(".status-btn").forEach((b) => {{
+      b.classList.toggle("active", b.dataset.statusValue === newValue);
+    }});
+    // Refresh counts in the filter bar
+    refreshStatusCounts(reqDoc);
+    // If new status is filtered out, fade and hide this card
+    const filter = getFilterState(reqDoc);
+    card.classList.toggle("hidden", !filter.has(newValue));
     return;
   }}
+
+  // Filter chip
+  const chip = e.target.closest(".status-filter .filter-chip");
+  if (chip) {{
+    const filterBar = chip.closest(".status-filter");
+    const reqDoc = filterBar.dataset.doc;
+    const filter = getFilterState(reqDoc);
+    const v = chip.dataset.filter;
+    if (filter.has(v)) {{
+      filter.delete(v);
+      chip.classList.add("inactive");
+    }} else {{
+      filter.add(v);
+      chip.classList.remove("inactive");
+    }}
+    applyFilterToCards(reqDoc);
+    return;
+  }}
+
+  // Filter bar tool button
+  const toolBtn = e.target.closest(".status-filter .filter-toolbtn");
+  if (toolBtn) {{
+    const filterBar = toolBtn.closest(".status-filter");
+    const reqDoc = filterBar.dataset.doc;
+    const filter = getFilterState(reqDoc);
+    const action = toolBtn.dataset.filterAction;
+    filter.clear();
+    if (action === "show-all") {{
+      for (const opt of STATUS_OPTIONS) filter.add(opt.value);
+    }} else if (action === "only-unset") {{
+      filter.add("unset");
+    }}
+    // Update chip visuals
+    filterBar.querySelectorAll(".filter-chip").forEach((c) => {{
+      c.classList.toggle("inactive", !filter.has(c.dataset.filter));
+    }});
+    applyFilterToCards(reqDoc);
+    return;
+  }}
+
   // "Cited by" badge
   const badge = e.target.closest(".cited-by-badge");
   if (badge) {{
     const fullKey = badge.dataset.fullkey;
     const reqs = REVERSE[fullKey] || [];
-    // Check if a list is already open after this heading
     const heading = badge.parentElement;
     const next = heading.nextElementSibling;
     if (next && next.classList && next.classList.contains("cited-by-list")) {{
@@ -883,44 +1094,47 @@ document.addEventListener("click", (e) => {{
   }}
 }});
 
+function applyFilterToCards(reqDoc) {{
+  const filter = getFilterState(reqDoc);
+  document.querySelectorAll('.req-card[data-req-doc="' + reqDoc + '"]').forEach((card) => {{
+    const s = card.dataset.status || "unset";
+    card.classList.toggle("hidden", !filter.has(s));
+  }});
+}}
+
+function refreshStatusCounts(reqDoc) {{
+  const counts = computeStatusCounts(reqDoc);
+  document.querySelectorAll('.status-filter[data-doc="' + reqDoc + '"] .filter-chip').forEach((chip) => {{
+    const v = chip.dataset.filter;
+    const countEl = chip.querySelector(".count");
+    if (countEl) countEl.textContent = counts[v] || 0;
+  }});
+}}
+
 document.addEventListener("input", (e) => {{
   if (e.target.matches("textarea[data-note]")) {{
-    const reqId = e.target.dataset.note;
-    const text = e.target.value;
-    const docKey = currentReqDocKey();
-    if (!docKey) return;
-    setNote(docKey, reqId, text);
-    const meta = e.target.parentElement.querySelector(".save-status");
+    const card = e.target.closest(".req-card");
+    if (!card) return;
+    const reqDoc = card.dataset.reqDoc;
+    const itemId = card.dataset.itemId;
+    setNote(reqDoc, itemId, e.target.value);
+    const meta = card.querySelector(".req-side .save-status");
     if (meta) {{
       meta.textContent = "saved " + new Date().toLocaleTimeString();
       setTimeout(() => {{ if (meta.textContent.startsWith("saved")) meta.textContent = ""; }}, 2500);
     }}
-    // Update toggle label
-    const card = e.target.closest(".req-card");
-    if (card) {{
-      const toggle = card.querySelector(".note-toggle");
-      if (toggle) {{
-        if (text.trim()) {{
-          toggle.classList.add("has-note");
-          toggle.textContent = "📝 Note (saved)";
-        }} else {{
-          toggle.classList.remove("has-note");
-          toggle.textContent = "+ Add note";
-        }}
-      }}
-    }}
   }}
 }});
-
-function currentReqDocKey() {{
-  const active = document.querySelector('.navbtn.active[data-kind="req"]');
-  return active ? active.dataset.doc : null;
-}}
 
 // === Export / Import ===
 
 document.getElementById("exportBtn").addEventListener("click", () => {{
-  const data = allNotes();
+  const data = {{
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    notes: allNotes(),
+    statuses: allStatuses()
+  }};
   const blob = new Blob([JSON.stringify(data, null, 2)], {{ type: "application/json" }});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -937,11 +1151,11 @@ document.getElementById("importInput").addEventListener("change", (e) => {{
   reader.onload = (ev) => {{
     try {{
       const obj = JSON.parse(ev.target.result);
-      const mode = confirm("OK = MERGE imported notes with existing.\\nCancel = REPLACE all existing notes.")
+      const mode = confirm("OK = MERGE imported notes/statuses with existing.\nCancel = REPLACE all existing notes/statuses.")
         ? "merge" : "replace";
-      const n = importNotesObject(obj, mode);
-      alert("Imported " + n + " notes (" + mode + ").");
-      navigateHash(); // re-render current page
+      const r = importExportPayload(obj, mode);
+      alert("Imported " + r.notes + " notes and " + r.statuses + " statuses (" + mode + ").");
+      navigateHash();
     }} catch (err) {{
       alert("Import failed: " + err.message);
     }}
@@ -978,7 +1192,7 @@ function runSearch(q) {{
   const list = document.createElement("div");
   list.id = "search-results";
   hits.forEach(({{ docKey, item }}) => {{
-    const re = new RegExp("(" + q.replace(/[.*+?^${{}}()|[\]\\\\]/g, "\\\\$&") + ")", "ig");
+    const re = new RegExp("(" + q.replace(/[.*+?^${{}}()|[\]\\]/g, "\\$&") + ")", "ig");
     const snippet = item.text.replace(re, "<mark>$1</mark>");
     const div = document.createElement("div");
     div.className = "search-hit";
@@ -1002,10 +1216,9 @@ navigateHash();
 
 
 def main():
-    # Build the label maps that get embedded as JS objects (we need them for the template).
     src_label_map = ",\n".join(f'  "{k}": "{lbl}"' for k, lbl, _ in SRC_DOCS)
     req_label_map = ",\n".join(f'  "{k}": "{lbl}"' for k, lbl, _ in REQ_DOCS)
-    # Read & build everything (HTML_TEMPLATE uses .format(); we need to also supply label maps)
+
     src_data = {}
     for key, label, path in SRC_DOCS:
         with open(os.path.join(ROOT, path), "r", encoding="utf-8") as f:
