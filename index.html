@@ -874,8 +874,45 @@ function loadLoadedSetsFromStorage() {
 }
 
 function saveLoadedSetsToStorage() {
-  try { localStorage.setItem(LOADED_SETS_KEY, JSON.stringify(LOADED_SETS)); }
-  catch (e) { console.error(e); }
+  // Default (auto-loaded) sets are re-fetched on each init, so skip persisting them.
+  try {
+    const toSave = LOADED_SETS.filter((s) => !s.isDefault);
+    localStorage.setItem(LOADED_SETS_KEY, JSON.stringify(toSave));
+  } catch (e) { console.error(e); }
+}
+
+// Reviews shipped in the repository and auto-loaded at init. Add entries
+// here to surface additional read-only review sets in the viewer.
+const DEFAULT_REVIEWS = [
+  { name: "Claude Boulder review", url: "reviews/claude_boulder_review.json" },
+];
+
+async function loadDefaultReviews() {
+  for (const def of DEFAULT_REVIEWS) {
+    // Skip if the user already loaded this URL manually.
+    if (LOADED_SETS.some((s) => s.source === def.url)) continue;
+    try {
+      const resp = await fetch(def.url, { cache: "no-cache" });
+      if (!resp.ok) {
+        console.warn("default review fetch failed:", def.url, resp.status);
+        continue;
+      }
+      const payload = await resp.json();
+      const norm = normalizeImportedPayload(payload);
+      LOADED_SETS.push({
+        id: "default-" + def.url,
+        name: def.name,
+        source: def.url,
+        comments: norm.comments,
+        versions: norm.versions,
+        isDefault: true,
+      });
+    } catch (e) {
+      console.warn("default review load failed:", def.url, e);
+    }
+  }
+  applySideCountVars();
+  renderLoadedSetsBar();
 }
 
 function normalizeImportedPayload(obj) {
@@ -2114,6 +2151,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   buildDocNav();
+  await loadDefaultReviews();
   navigateHash();
 })();
 </script>

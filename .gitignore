@@ -1,2 +1,4 @@
 build/*
 !build/marked.min.js
+__pycache__/
+*.pyc
