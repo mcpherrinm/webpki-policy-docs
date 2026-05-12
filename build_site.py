@@ -103,14 +103,20 @@ def parse_doc(md_text):
         leading = len(line) - len(stripped)
 
         if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_code = not in_code
-            in_para = False
-            in_table = False
-            in_list = False
-            in_blockquote = False
-            last_para_idx = None
-            i += 1
-            continue
+            # CommonMark §4.5: a backtick-fence info string MAY NOT contain
+            # backticks, so a line like ```code``` is an inline code span on a
+            # paragraph line, not a fence opener. (marked.js renders it the
+            # same way.) Detect that case and fall through to the paragraph
+            # branch instead of toggling in_code.
+            if not (stripped[0] == "`" and "`" in stripped[3:]):
+                in_code = not in_code
+                in_para = False
+                in_table = False
+                in_list = False
+                in_blockquote = False
+                last_para_idx = None
+                i += 1
+                continue
         if in_code:
             i += 1
             continue

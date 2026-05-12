@@ -52,8 +52,8 @@
       "version": "2.0",
       "path": "ccadb/2.0.md",
       "title": "CCADB Policy",
-      "section_count": 17,
-      "elt_count": 165
+      "section_count": 25,
+      "elt_count": 220
     },
     {
       "key": "letsencrypt_cp_cps",
@@ -35184,7 +35184,637 @@
       "title": "ALV Formatting",
       "kind": "p",
       "ord": 5,
-      "snippet": "<br>"
+      "snippet": "<br> ```<date><space><splitter><space><date>``` <br><br>"
+    },
+    {
+      "ref": "ccadb/5.2.3/p6",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "p",
+      "ord": 6,
+      "snippet": "Where splitter MUST be one of the following:"
+    },
+    {
+      "ref": "ccadb/5.2.3/li9",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 9,
+      "snippet": "to"
+    },
+    {
+      "ref": "ccadb/5.2.3/li10",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 10,
+      "snippet": "through"
+    },
+    {
+      "ref": "ccadb/5.2.3/li11",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 11,
+      "snippet": "until"
+    },
+    {
+      "ref": "ccadb/5.2.3/li12",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 12,
+      "snippet": "and"
+    },
+    {
+      "ref": "ccadb/5.2.3/li13",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 13,
+      "snippet": "\\-"
+    },
+    {
+      "ref": "ccadb/5.2.3/li14",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.2.3",
+      "title": "ALV Formatting",
+      "kind": "li",
+      "ord": 14,
+      "snippet": "\\~"
+    },
+    {
+      "ref": "ccadb/5.3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3",
+      "title": "Audit Firm and Audit Team Qualifications",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Audit Firm and Audit Team Qualifications"
+    },
+    {
+      "ref": "ccadb/5.3/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3",
+      "title": "Audit Firm and Audit Team Qualifications",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "CA Owners MUST ensure audits used to comply with this policy are performed by entities licensed or otherwise permitted to provide assurance services in the country(ies) where the assessment is perform"
+    },
+    {
+      "ref": "ccadb/5.3.1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Audit Team Qualifications"
+    },
+    {
+      "ref": "ccadb/5.3.1/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "Each audit statement MUST be accompanied by documentation of the audit team qualifications sufficient to determine the competence, experience, and independence of the auditor. This documentation MAY b"
+    },
+    {
+      "ref": "ccadb/5.3.1/li1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 1,
+      "snippet": "Date that the audit report was signed;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 2,
+      "snippet": "Full name of the CA Owner that was audited;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 3,
+      "snippet": "Name and address of the audit firm or CAB;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 4,
+      "snippet": "Audit criteria (e.g., ETSI / WebTrust);"
+    },
+    {
+      "ref": "ccadb/5.3.1/li5",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 5,
+      "snippet": "Proof of audit firm or CAB Accreditation URL (e.g., the auditor is listed in [CPA Canada's Licensed WebTrust practitioners web page](https://www.cpacanada.ca/en/business-and-accounting-resources/audit"
+    },
+    {
+      "ref": "ccadb/5.3.1/li6",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 6,
+      "snippet": "Name of Lead Auditor or Signing Partner (except where prohibited by law or other public policy, in which case, we ask that you not provide any personally identifiable information in the document);"
+    },
+    {
+      "ref": "ccadb/5.3.1/li7",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 7,
+      "snippet": "For the audit team and the audit Quality Reviewer or QA Partner, qualification information such as:"
+    },
+    {
+      "ref": "ccadb/5.3.1/li8",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 8,
+      "snippet": "Number of audit team members;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li9",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 9,
+      "snippet": "Academic qualifications or professional training received;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li10",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 10,
+      "snippet": "Average years of auditing experience auditing trust services or similar information systems;"
+    },
+    {
+      "ref": "ccadb/5.3.1/li11",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 11,
+      "snippet": "Experience, special skills, and qualifications (e.g., audit/assessment principles and functions, information technology, software development, trust services, public key infrastructure, CA operations,"
+    },
+    {
+      "ref": "ccadb/5.3.1/li12",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 12,
+      "snippet": "Credentials, designations, or certifications (e.g., CPA, CISA, CITP, CISSP, CCSP/CCA/CCP, etc.)."
+    },
+    {
+      "ref": "ccadb/5.3.1/li13",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 13,
+      "snippet": "How the audit team and team members are bound by law, regulation or professional standards to render an independent assessment of the CA (e.g., https://pub.aicpa.org/codeofconduct/Ethics.aspx# 0.300.0"
+    },
+    {
+      "ref": "ccadb/5.3.1/li14",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "5.3.1",
+      "title": "Audit Team Qualifications",
+      "kind": "li",
+      "ord": 14,
+      "snippet": "Whether the audit team relied on any third-party specialists or affiliate audit firms, and if so, their names and where they performed services."
+    },
+    {
+      "ref": "ccadb/6",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6",
+      "title": "Additional Required Practices",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Additional Required Practices"
+    },
+    {
+      "ref": "ccadb/6.1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.1",
+      "title": "Disclosing and Responding to Incidents",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Disclosing and Responding to Incidents"
+    },
+    {
+      "ref": "ccadb/6.1/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.1",
+      "title": "Disclosing and Responding to Incidents",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "The CCADB [Incident Reporting Guidelines (IRGs)](https://www.ccadb.org/cas/incident-report) intend to present a common format for publicly disclosing incidents. CA Owners who are required to publicly "
+    },
+    {
+      "ref": "ccadb/6.1/li1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.1",
+      "title": "Disclosing and Responding to Incidents",
+      "kind": "li",
+      "ord": 1,
+      "snippet": "SHOULD always use the latest available version of the CCADB IRG templates, and"
+    },
+    {
+      "ref": "ccadb/6.1/li2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.1",
+      "title": "Disclosing and Responding to Incidents",
+      "kind": "li",
+      "ord": 2,
+      "snippet": "MUST NOT use a version of an IRG template that has been superseded by more than 30 calendar days before the corresponding report (i.e., preliminary, full, or closure) is posted."
+    },
+    {
+      "ref": "ccadb/6.2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Certificate Revocation List Disclosures"
+    },
+    {
+      "ref": "ccadb/6.2/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "For each unexpired and unrevoked CA certificate record disclosed to the CCADB and within 7 days of the corresponding CA issuing its first certificate, CA Owners MUST disclose either:"
+    },
+    {
+      "ref": "ccadb/6.2/li1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 1,
+      "snippet": "the URL of a full and complete Certificate Revocation List (CRL); or"
+    },
+    {
+      "ref": "ccadb/6.2/li2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 2,
+      "snippet": "a JSON Array of Partitioned CRL URLs."
+    },
+    {
+      "ref": "ccadb/6.2/p2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "p",
+      "ord": 2,
+      "snippet": "URLs:"
+    },
+    {
+      "ref": "ccadb/6.2/li3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 3,
+      "snippet": "MUST match exactly as they appear in the certificates issued by the corresponding CA."
+    },
+    {
+      "ref": "ccadb/6.2/p3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "p",
+      "ord": 3,
+      "snippet": "If populating a full and complete CRL URL:"
+    },
+    {
+      "ref": "ccadb/6.2/li4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 4,
+      "snippet": "the corresponding CRL SHOULD NOT contain an 'Issuing Distribution Point' extension."
+    },
+    {
+      "ref": "ccadb/6.2/li5",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 5,
+      "snippet": "the JSON Array of Partitioned CRL URLs field MUST be empty."
+    },
+    {
+      "ref": "ccadb/6.2/p4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "p",
+      "ord": 4,
+      "snippet": "If populating a JSON Array of Partitioned CRL URLs:"
+    },
+    {
+      "ref": "ccadb/6.2/li6",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 6,
+      "snippet": "CA Owners MUST ensure that each corresponding CRL contains a critical 'Issuing Distribution Point' extension and the 'distributionPoint' field of the extension MUST include a 'UniformResourceIdentifie"
+    },
+    {
+      "ref": "ccadb/6.2/li7",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "li",
+      "ord": 7,
+      "snippet": "the full and complete CRL URL MUST be empty."
+    },
+    {
+      "ref": "ccadb/6.2/p5",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.2",
+      "title": "Certificate Revocation List Disclosures",
+      "kind": "p",
+      "ord": 5,
+      "snippet": "Under normal operating conditions, the CRL URLs provided by CAs in accordance with this section MUST be available such that relying parties are able to successfully retrieve the current CRL every 4 ho"
+    },
+    {
+      "ref": "ccadb/6.3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Cross-certification across PKI Hierarchies"
+    },
+    {
+      "ref": "ccadb/6.3/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "Some Root Store Operators participating in the CCADB maintain policy requirements such that hierarchies included in the corresponding root store(s) are dedicated to a specific PKI use case, for exampl"
+    },
+    {
+      "ref": "ccadb/6.3/p2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "p",
+      "ord": 2,
+      "snippet": "In support of ubiquity use-cases, CA Owners sometimes issue cross-certificates from non-dedicated hierarchy Root CAs (i.e., “multi-purpose hierarchies”) to dedicated-use hierarchy Root CAs."
+    },
+    {
+      "ref": "ccadb/6.3/p3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "p",
+      "ord": 3,
+      "snippet": "Beginning June 15, 2025, when new cross-certificates are issued across PKI hierarchies and the Subject CA’s public key (a) exists in or (b) might exist in a publicly-trusted self-signed Root CA certif"
+    },
+    {
+      "ref": "ccadb/6.3/tr1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 1,
+      "snippet": "| TLS server authentication | MUST | Only 1.3.6.1.5.5.7.3.1                       |"
+    },
+    {
+      "ref": "ccadb/6.3/tr2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 2,
+      "snippet": "| TLS client authentication | MUST | Only 1.3.6.1.5.5.7.3.2                       |"
+    },
+    {
+      "ref": "ccadb/6.3/tr3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 3,
+      "snippet": "| TLS (generic)             | MUST | Only 1.3.6.1.5.5.7.3.1 and 1.3.6.1.5.5.7.3.2 |"
+    },
+    {
+      "ref": "ccadb/6.3/tr4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 4,
+      "snippet": "| S/MIME                    | MUST | Only 1.3.6.1.5.5.7.3.4                       |"
+    },
+    {
+      "ref": "ccadb/6.3/tr5",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 5,
+      "snippet": "| S/MIME (generic)          | MUST | Only 1.3.6.1.5.5.7.3.4 and 1.3.6.1.5.5.7.3.2 |"
+    },
+    {
+      "ref": "ccadb/6.3/tr6",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "tr",
+      "ord": 6,
+      "snippet": "| Code signing              | MUST | Only 1.3.6.1.5.5.7.3.3                       |"
+    },
+    {
+      "ref": "ccadb/6.3/p4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.3",
+      "title": "Cross-certification across PKI Hierarchies",
+      "kind": "p",
+      "ord": 4,
+      "snippet": "In cases where both the Issuer and the Subject hierarchies are capable of issuing Extended Validation (EV) certificates, the cross-certificate MUST include the EV CA/Browser Forum Reserved Certificate"
+    },
+    {
+      "ref": "ccadb/6.4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.4",
+      "title": "Annual CCADB Self-Assessments",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Annual CCADB Self-Assessments"
+    },
+    {
+      "ref": "ccadb/6.4/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.4",
+      "title": "Annual CCADB Self-Assessments",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "At least annually, CA Owners MUST complete a self-assessment using [this](https://www.ccadb.org/cas/self-assessment) template to attest to the conformance of the CA Owner’s policies against industry p"
+    },
+    {
+      "ref": "ccadb/6.4/p2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.4",
+      "title": "Annual CCADB Self-Assessments",
+      "kind": "p",
+      "ord": 2,
+      "snippet": "A single self-assessment MAY cover multiple CAs operating under both the same CP and CPS(s), or combined CP/CPS. CAs not operated under the same CP and CPS(s) or combined CP/CPS MUST be covered in a s"
+    },
+    {
+      "ref": "ccadb/6.4/p3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.4",
+      "title": "Annual CCADB Self-Assessments",
+      "kind": "p",
+      "ord": 3,
+      "snippet": "The self-assessment submission date is determined by the earliest appearing \"BR Audit Period End Date\" field specified in any of the CA Owner’s \"CA Owner/Certificate\" CCADB root records that are inclu"
+    },
+    {
+      "ref": "ccadb/6.4/p4",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "6.4",
+      "title": "Annual CCADB Self-Assessments",
+      "kind": "p",
+      "ord": 4,
+      "snippet": "An annual self-assessment MUST be completed and submitted to the CCADB within 92 calendar days from the CA Owner's earliest appearing root record \"BR Audit Period End Date.\" CA Owners SHOULD submit th"
+    },
+    {
+      "ref": "ccadb/7",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "7",
+      "title": "Mailshots",
+      "kind": "section",
+      "ord": 0,
+      "snippet": "Mailshots"
+    },
+    {
+      "ref": "ccadb/7/p1",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "7",
+      "title": "Mailshots",
+      "kind": "p",
+      "ord": 1,
+      "snippet": "From time to time, a Root Store Operator MAY use the CCADB to send information to CA Owners. Mailshots will be sent to at least the Primary POC(s) and the CA Owners' email aliases, and may also go to "
+    },
+    {
+      "ref": "ccadb/7/p2",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "7",
+      "title": "Mailshots",
+      "kind": "p",
+      "ord": 2,
+      "snippet": "-----"
+    },
+    {
+      "ref": "ccadb/7/p3",
+      "doc": "ccadb",
+      "version": "2.0",
+      "section": "7",
+      "title": "Mailshots",
+      "kind": "p",
+      "ord": 3,
+      "snippet": "Any copyright in this document is [dedicated to the Public Domain](https://creativecommons.org/publicdomain/zero/1.0/)."
     },
     {
       "ref": "letsencrypt_cp_cps/1",
