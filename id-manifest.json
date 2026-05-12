@@ -1,14 +1,70 @@
 {
-  "version": 2,
-  "doc_versions": {
-    "cabf_br": "2.2.6",
-    "mozilla": "3.0",
-    "chrome": "1.8",
-    "apple": "2023-08-15",
-    "microsoft": "1.1",
-    "ccadb": "2.0",
-    "letsencrypt_cp_cps": "6.0"
-  },
+  "version": 3,
+  "docs": [
+    {
+      "key": "cabf_br",
+      "label": "CABF BR",
+      "version": "2.2.6",
+      "path": "cabf_br/2.2.6.md",
+      "title": "1. INTRODUCTION",
+      "section_count": 414,
+      "elt_count": 1904
+    },
+    {
+      "key": "mozilla",
+      "label": "Mozilla",
+      "version": "3.0",
+      "path": "mozilla/3.0.md",
+      "title": "Mozilla Root Store Policy",
+      "section_count": 54,
+      "elt_count": 314
+    },
+    {
+      "key": "chrome",
+      "label": "Chrome",
+      "version": "1.8",
+      "path": "chrome/1.8.md",
+      "title": "Chrome Root Program Policy, Version 1.8",
+      "section_count": 47,
+      "elt_count": 254
+    },
+    {
+      "key": "apple",
+      "label": "Apple",
+      "version": "2023-08-15",
+      "path": "apple/2023-08-15.md",
+      "title": "Apple Root Certificate Program",
+      "section_count": 30,
+      "elt_count": 150
+    },
+    {
+      "key": "microsoft",
+      "label": "Microsoft",
+      "version": "1.1",
+      "path": "microsoft/1.1.md",
+      "title": "Microsoft Root Program Requirements v1.1",
+      "section_count": 27,
+      "elt_count": 136
+    },
+    {
+      "key": "ccadb",
+      "label": "CCADB",
+      "version": "2.0",
+      "path": "ccadb/2.0.md",
+      "title": "CCADB Policy",
+      "section_count": 17,
+      "elt_count": 165
+    },
+    {
+      "key": "letsencrypt_cp_cps",
+      "label": "LE CP/CPS",
+      "version": "6.0",
+      "path": "letsencrypt_cp_cps/6.0.md",
+      "title": "1. INTRODUCTION",
+      "section_count": 285,
+      "elt_count": 471
+    }
+  ],
   "entries": [
     {
       "ref": "cabf_br/1",
