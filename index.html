@@ -1472,25 +1472,22 @@ function onHandleClicked(handle) {
     '.section-row[data-section-id="' + cssEscape(sectionId) + '"] .commentary-col[data-col-kind="local"]'
   );
   if (!localCol) return;
-  // If this elt already has a local comment, scroll to/focus the last one.
+  // If this elt already has a local comment, focus the last one (no scroll).
   const existing = localCol.querySelectorAll('.comment-card[data-elt-id="' + cssEscape(eltId) + '"]');
   if (existing.length > 0) {
     const last = existing[existing.length - 1];
-    last.scrollIntoView({ block: "center", behavior: "smooth" });
     const ta = last.querySelector("textarea");
-    if (ta) ta.focus();
+    if (ta) ta.focus({ preventScroll: true });
     return;
   }
-  // Otherwise: create a fresh empty comment, render, focus.
+  // Otherwise: create a fresh empty comment and focus it without scrolling.
   const c = addComment(docKey, eltId, "");
   const card = renderCommentCard({ docKey, eltId, comment: c, readonly: false });
-  // Insert in column at sorted position.
   insertCardSorted(localCol, card);
   refreshAllHandlesFor(docKey, eltId);
   scheduleAlign();
-  card.scrollIntoView({ block: "center", behavior: "smooth" });
   const ta = card.querySelector("textarea");
-  if (ta) ta.focus();
+  if (ta) ta.focus({ preventScroll: true });
 }
 
 function insertCardSorted(col, card) {
