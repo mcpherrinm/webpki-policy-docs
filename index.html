@@ -659,12 +659,15 @@ async function getMarkdown(docKey) {
 function buildDocNav() {
   const nav = document.getElementById("docNav");
   if (!nav) return;
-  nav.innerHTML = SRC_KEYS.map((k) => {
+  nav.replaceChildren(...SRC_KEYS.map((k) => {
     const ver = SRC_VERSIONS[k] || "";
-    return '<button class="navbtn" data-doc="' + escapeAttr(k) +
-           '" title="Refs: ' + escapeAttr(k) + '/&lt;section&gt; (v' + escapeAttr(ver) + ')">' +
-           escapeHtml(SRC_LABELS[k]) + '</button>';
-  }).join("");
+    const btn = document.createElement("button");
+    btn.className = "navbtn";
+    btn.dataset.doc = k;
+    btn.title = `Refs: ${k}/<section> (v${ver})`;
+    btn.textContent = SRC_LABELS[k];
+    return btn;
+  }));
 }
 
 // ===== marked.js configuration =====
@@ -950,11 +953,14 @@ function renderLoadedSetsBar() {
   if (!bar) return;
   if (LOADED_SETS.length === 0) {
     bar.style.display = "none";
-    bar.innerHTML = "";
+    bar.replaceChildren();
     return;
   }
   bar.style.display = "flex";
-  let h = '<span class="label">Loaded:</span>';
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "Loaded:";
+  const children = [label];
   for (const s of LOADED_SETS) {
     let count = 0;
     const mismatches = [];
@@ -969,19 +975,26 @@ function renderLoadedSetsBar() {
     }
     let title = count + " comment(s)" + (s.source ? " from " + s.source : "");
     if (mismatches.length) title += "\nVersion mismatch: " + mismatches.join("; ");
-    h += '<span class="loaded-set-chip' + (mismatches.length ? ' mismatch' : '') + '" title="' + escapeAttr(title) + '">' +
-         escapeHtml(s.name) +
-         (mismatches.length ? ' <span class="vmark" aria-hidden="true">⚠</span>' : '') +
-         ' <button class="remove-btn" data-remove-set="' + escapeAttr(s.id) + '">×</button></span>';
+    const chip = document.createElement("span");
+    chip.className = "loaded-set-chip" + (mismatches.length ? " mismatch" : "");
+    chip.title = title;
+    chip.append(s.name);
+    if (mismatches.length) {
+      const v = document.createElement("span");
+      v.className = "vmark";
+      v.setAttribute("aria-hidden", "true");
+      v.textContent = " ⚠";
+      chip.append(v);
+    }
+    const rm = document.createElement("button");
+    rm.className = "remove-btn";
+    rm.dataset.removeSet = s.id;
+    rm.textContent = "×";
+    chip.append(" ", rm);
+    children.push(chip);
   }
-  bar.innerHTML = h;
+  bar.replaceChildren(...children);
 }
-
-// ===== Helpers =====
-function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-function escapeAttr(s) { return escapeHtml(s); }
 
 // ===== Element-ID computation (must match Python parser) =====
 //
@@ -1057,20 +1070,27 @@ async function renderDocPage(docKey) {
   const page = document.createElement("div");
   page.className = "doc-page";
   page.dataset.docKey = docKey;
-  page.innerHTML =
-    '<h1 class="doc-title">' + escapeHtml(SRC_LABELS[docKey]) +
-    ' <span class="doc-version">v' + escapeHtml(doc.version || "") + '</span></h1>' +
-    '<div class="doc-meta">Rendered from ' + escapeHtml(doc.filename) +
-    ' · ' + (doc.section_count || 0) + ' sections · ' + (doc.elt_count || 0) + ' commentable elements · ' +
-    'Refs look like <code>' + escapeHtml(docKey) + '/&lt;section&gt;</code> or ' +
-    '<code>' + escapeHtml(docKey) + '/&lt;section&gt;/p3</code> ' +
-    '(e.g. in code: <code>// webpki:' + escapeHtml(docKey) + '/&lt;section&gt;/p3</code>).</div>';
+  page.setHTML(
+    '<h1 class="doc-title"><span class="doc-name"></span> <span class="doc-version"></span></h1>' +
+    '<div class="doc-meta">Rendered from <code class="filename"></code>' +
+    ' · <span class="counts"></span> · ' +
+    'Refs look like <code class="ref-pat"></code> or <code class="ref-pat-p"></code> ' +
+    '(e.g. in code: <code class="ref-pat-code"></code>).</div>'
+  );
+  page.querySelector(".doc-name").textContent = SRC_LABELS[docKey];
+  page.querySelector(".doc-version").textContent = "v" + (doc.version || "");
+  page.querySelector(".filename").textContent = doc.filename;
+  page.querySelector(".counts").textContent =
+    (doc.section_count || 0) + " sections · " + (doc.elt_count || 0) + " commentable elements";
+  page.querySelector(".ref-pat").textContent = docKey + "/<section>";
+  page.querySelector(".ref-pat-p").textContent = docKey + "/<section>/p3";
+  page.querySelector(".ref-pat-code").textContent = "// webpki:" + docKey + "/<section>/p3";
 
   // Build TOC from headings while we render.
   const tocWrap = document.createElement("details");
   tocWrap.className = "toc-wrap";
   tocWrap.open = false;
-  tocWrap.innerHTML = '<summary>Table of contents</summary><div class="toc-grid"></div>';
+  tocWrap.setHTML('<summary>Table of contents</summary><div class="toc-grid"></div>');
   page.appendChild(tocWrap);
   const tocBox = tocWrap.querySelector(".toc-grid");
 
@@ -1090,8 +1110,7 @@ async function renderDocPage(docKey) {
     content.className = "section-content";
     if (!chunk.heading) content.classList.add("preamble-block");
 
-    const html = marked.parse(chunk.body || "");
-    content.innerHTML = html;
+    content.setHTML(marked.parse(chunk.body || ""));
 
     // Compute section id for this chunk.
     let sectionId;
@@ -1213,11 +1232,13 @@ function refreshHandle(a) {
   const ref = formatRefSymbol(a.dataset.eltId);
   if (n > 0) {
     a.classList.add("has-comments");
-    a.innerHTML = '<span class="count">' + n + '</span> ' + escapeHtml(ref);
+    a.setHTML('<span class="count"></span> <span class="ref"></span>');
+    a.querySelector(".count").textContent = n;
+    a.querySelector(".ref").textContent = ref;
     a.title = n + " comment(s) on " + a.dataset.docKey + "/" + a.dataset.eltId;
   } else {
     a.classList.remove("has-comments");
-    a.innerHTML = '+ ' + escapeHtml(ref);
+    a.replaceChildren("+ " + ref);
     a.title = "Add comment on " + a.dataset.docKey + "/" + a.dataset.eltId;
   }
 }
@@ -1254,11 +1275,12 @@ function makeCommentaryColumn({ kind, docKey, sectionId, set }) {
   col.dataset.sectionId = sectionId;
   if (kind === "local") {
     col.dataset.colKind = "local";
-    col.innerHTML = "";
+    col.replaceChildren();
   } else {
     col.dataset.colKind = "loaded";
     col.dataset.setId = set.id;
-    col.innerHTML = '<div class="col-header"><span class="set-name">' + escapeHtml(set.name) + '</span></div>';
+    col.setHTML('<div class="col-header"><span class="set-name"></span></div>');
+    col.querySelector(".set-name").textContent = set.name;
   }
   renderCommentaryColumn(col);
   return col;
@@ -1284,8 +1306,7 @@ function renderCommentaryColumn(col) {
 
   // Remove old comment cards from this column (preserve header)
   const header = col.querySelector(".col-header");
-  col.innerHTML = "";
-  if (header) col.appendChild(header);
+  col.replaceChildren(...(header ? [header] : []));
 
   if (eltIds.length === 0) {
     // empty column — no per-section hint, the doc-meta line covers usage.
@@ -1356,7 +1377,7 @@ function decorateSection(row) {
   if (!page) return;
   const docKey = page.dataset.docKey;
   const sectionId = row.dataset.sectionId;
-  strip.innerHTML = "";
+  strip.replaceChildren();
 
   if (window.innerWidth > 1100) {
     const rowRect = row.getBoundingClientRect();
@@ -1432,16 +1453,20 @@ const STATUS_OPTIONS = [
   { value: "na",           label: "N/A" },
 ];
 
-function renderReviewButtons(currentStatus) {
-  let html = '<div class="review-status-row" role="group" aria-label="Review status">';
+function makeReviewButtons(currentStatus) {
+  const row = document.createElement("div");
+  row.className = "review-status-row";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", "Review status");
   for (const opt of STATUS_OPTIONS) {
-    const active = currentStatus === opt.value;
-    html += '<button class="review-btn ' + opt.value + (active ? ' active' : '') +
-            '" data-review-value="' + opt.value + '" title="Toggle ' + opt.label + '">' +
-            escapeHtml(opt.label) + '</button>';
+    const btn = document.createElement("button");
+    btn.className = "review-btn " + opt.value + (currentStatus === opt.value ? " active" : "");
+    btn.dataset.reviewValue = opt.value;
+    btn.title = "Toggle " + opt.label;
+    btn.textContent = opt.label;
+    row.appendChild(btn);
   }
-  html += '</div>';
-  return html;
+  return row;
 }
 
 function renderCommentCard({ docKey, eltId, comment, readonly }) {
@@ -1451,56 +1476,77 @@ function renderCommentCard({ docKey, eltId, comment, readonly }) {
   card.dataset.eltId = eltId;
   card.dataset.commentId = comment.id;
   card.dataset.reviewStatus = comment.status || "";
+
   const isSection = !eltId.includes("/");
   const refLabel = formatRefSymbol(eltId);
-  let html = '<div>' +
-    '<span class="ref-chip' + (isSection ? ' section-ref' : '') + '" data-jump-elt="' + escapeAttr(eltId) + '" title="Jump to element">' +
-      escapeHtml(refLabel) +
-    '</span>';
-  if (!readonly) {
-    html += '<button class="delete-btn" title="Delete this comment">×</button>';
-  }
-  html += '</div>';
 
-  // Body: read-only renders markdown + a status pill; editable shows textarea + preview + review buttons.
+  const headRow = document.createElement("div");
+  const chip = document.createElement("span");
+  chip.className = "ref-chip" + (isSection ? " section-ref" : "");
+  chip.dataset.jumpElt = eltId;
+  chip.title = "Jump to element";
+  chip.textContent = refLabel;
+  headRow.appendChild(chip);
+  if (!readonly) {
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.title = "Delete this comment";
+    del.textContent = "×";
+    headRow.appendChild(del);
+  }
+  card.appendChild(headRow);
+
   if (readonly) {
-    html += '<div class="rendered">' + renderCommentMarkdown(comment.text) + '</div>';
+    const rendered = document.createElement("div");
+    rendered.className = "rendered";
+    renderCommentMarkdownInto(rendered, comment.text);
+    card.appendChild(rendered);
     if (comment.status) {
       const opt = STATUS_OPTIONS.find((o) => o.value === comment.status);
-      html += '<div class="readonly-status ' + comment.status + '">' + escapeHtml(opt ? opt.label : comment.status) + '</div>';
+      const pill = document.createElement("div");
+      pill.className = "readonly-status " + comment.status;
+      pill.textContent = opt ? opt.label : comment.status;
+      card.appendChild(pill);
     }
   } else {
-    html += '<textarea class="cmt-text" placeholder="Markdown. Refs: [label](#doc/sec/p3), [[doc/sec/p3]], or &quot;CABF BR §3.2 ¶1&quot;">' +
-            escapeHtml(comment.text || "") + '</textarea>';
-    html += '<div class="rendered"></div>';
-    html += renderReviewButtons(comment.status);
-    html += '<div class="meta"><span class="save-status"></span><span>' + (comment.updatedAt ? new Date(comment.updatedAt).toLocaleString() : "") + '</span></div>';
-  }
-  card.innerHTML = html;
+    const ta = document.createElement("textarea");
+    ta.className = "cmt-text";
+    ta.placeholder = 'Markdown. Refs: [label](#doc/sec/p3), [[doc/sec/p3]], or "CABF BR §3.2 ¶1"';
+    ta.value = comment.text || "";
+    card.appendChild(ta);
 
-  if (!readonly) {
-    const ta = card.querySelector(".cmt-text");
-    const rendered = card.querySelector(".rendered");
-    rendered.innerHTML = renderCommentMarkdown(ta.value);
+    const rendered = document.createElement("div");
+    rendered.className = "rendered";
+    renderCommentMarkdownInto(rendered, ta.value);
+    card.appendChild(rendered);
+
+    card.appendChild(makeReviewButtons(comment.status));
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const saveStatus = document.createElement("span");
+    saveStatus.className = "save-status";
+    meta.appendChild(saveStatus);
+    const when = document.createElement("span");
+    when.textContent = comment.updatedAt ? new Date(comment.updatedAt).toLocaleString() : "";
+    meta.appendChild(when);
+    card.appendChild(meta);
   }
   return card;
 }
 
 // ===== Markdown rendering + cross-reference linkification =====
 
-function renderCommentMarkdown(md) {
-  if (!md) return "";
+function renderCommentMarkdownInto(target, md) {
+  if (!md) { target.replaceChildren(); return; }
   let html = marked.parseInline(md.replace(/\n\n+/g, "<br>"));
   // marked.parseInline doesn't do block-level; for short notes that's fine,
   // but we also want lists/paras. Use full parse if there are blank lines.
   if (md.indexOf("\n\n") >= 0 || md.indexOf("\n- ") >= 0 || md.indexOf("\n* ") >= 0) {
     html = marked.parse(md);
   }
-  // Linkify cross-refs in the resulting HTML's text nodes.
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  linkifyRefs(tmp);
-  return tmp.innerHTML;
+  target.setHTML(html);
+  linkifyRefs(target);
 }
 
 // Patterns we recognise (in priority order):
@@ -1621,28 +1667,41 @@ function linkifyRefs(root) {
 // ===== Manifest page =====
 function renderManifestPage() {
   const page = document.createElement("div");
-  page.innerHTML =
+  page.setHTML(
     '<h1 class="doc-title">ID Manifest</h1>' +
-    '<div class="doc-meta">' + MANIFEST.length + ' commentable elements across ' + SRC_KEYS.length + ' documents. ' +
+    '<div class="doc-meta"><span class="counts"></span> commentable elements across ' +
+    '<span class="docs-count"></span> documents. ' +
     'Use any <code>ref</code> below as a stable cross-reference in code comments or notes — e.g. ' +
-    '<code>// webpki:cabf_br/7.1.2.10.2/p3</code>.</div>';
+    '<code>// webpki:cabf_br/7.1.2.10.2/p3</code>.</div>'
+  );
+  page.querySelector(".counts").textContent = MANIFEST.length;
+  page.querySelector(".docs-count").textContent = SRC_KEYS.length;
   const sw = document.createElement("div");
-  sw.innerHTML = '<input id="manifest-filter" type="search" placeholder="Filter… (ref, title, snippet)" style="width:340px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;margin-bottom:8px;">';
+  sw.setHTML('<input id="manifest-filter" type="search" placeholder="Filter… (ref, title, snippet)" style="width:340px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;margin-bottom:8px;">');
   page.appendChild(sw);
   const tbl = document.createElement("table");
   tbl.className = "manifest-table";
-  tbl.innerHTML = '<thead><tr><th>Ref</th><th>Doc</th><th>Section</th><th>Kind</th><th>Snippet</th></tr></thead><tbody></tbody>';
+  tbl.setHTML('<thead><tr><th>Ref</th><th>Doc</th><th>Section</th><th>Kind</th><th>Snippet</th></tr></thead><tbody></tbody>');
   page.appendChild(tbl);
   const tb = tbl.querySelector("tbody");
   for (const r of MANIFEST) {
     const tr = document.createElement("tr");
     tr.dataset.searchKey = (r.ref + " " + r.title + " " + r.snippet).toLowerCase();
-    tr.innerHTML =
-      '<td class="ref"><a href="#' + escapeAttr(r.doc) + '/' + escapeAttr(r.section + (r.kind === "section" ? "" : "/" + r.kind + r.ord)) + '">' + escapeHtml(r.ref) + '</a></td>' +
-      '<td>' + escapeHtml(SRC_LABELS[r.doc] || r.doc) + '</td>' +
-      '<td>' + escapeHtml(r.section + (r.title && r.title !== r.section ? " " + r.title : "")) + '</td>' +
-      '<td>' + escapeHtml(r.kind === "section" ? "§" : r.kind) + (r.kind !== "section" ? r.ord : "") + '</td>' +
-      '<td>' + escapeHtml(r.snippet || "") + '</td>';
+    const refTd = document.createElement("td");
+    refTd.className = "ref";
+    const a = document.createElement("a");
+    a.href = "#" + r.doc + "/" + r.section + (r.kind === "section" ? "" : "/" + r.kind + r.ord);
+    a.textContent = r.ref;
+    refTd.appendChild(a);
+    const docTd = document.createElement("td");
+    docTd.textContent = SRC_LABELS[r.doc] || r.doc;
+    const secTd = document.createElement("td");
+    secTd.textContent = r.section + (r.title && r.title !== r.section ? " " + r.title : "");
+    const kindTd = document.createElement("td");
+    kindTd.textContent = (r.kind === "section" ? "§" : r.kind) + (r.kind !== "section" ? r.ord : "");
+    const snipTd = document.createElement("td");
+    snipTd.textContent = r.snippet || "";
+    tr.append(refTd, docTd, secTd, kindTd, snipTd);
     tb.appendChild(tr);
   }
   // wire up filter
@@ -1688,7 +1747,7 @@ async function navigateHash() {
 async function renderRoute(docKey, eltId) {
   document.querySelectorAll(".navbtn").forEach((b) => b.classList.remove("active"));
   const main = document.getElementById("content");
-  main.innerHTML = "";
+  main.replaceChildren();
   if (docKey === "manifest") {
     document.querySelector('.navbtn[data-route="#manifest"]')?.classList.add("active");
     main.appendChild(renderManifestPage());
@@ -1696,18 +1755,24 @@ async function renderRoute(docKey, eltId) {
   }
   const btn = document.querySelector('.navbtn[data-doc="' + cssEscape(docKey) + '"]');
   if (btn) btn.classList.add("active");
-  main.innerHTML = '<div class="doc-loading">Loading ' + escapeHtml(SRC_LABELS[docKey] || docKey) + '…</div>';
+  const loading = document.createElement("div");
+  loading.className = "doc-loading";
+  loading.textContent = "Loading " + (SRC_LABELS[docKey] || docKey) + "…";
+  main.replaceChildren(loading);
   let page;
   try {
     page = await renderDocPage(docKey);
   } catch (err) {
-    main.innerHTML = '<div class="doc-error">Failed to load <code>' +
-      escapeHtml(SRC_DATA[docKey] ? SRC_DATA[docKey].path : docKey) + '</code>: ' +
-      escapeHtml(err.message || String(err)) + '</div>';
+    const errEl = document.createElement("div");
+    errEl.className = "doc-error";
+    errEl.append("Failed to load ");
+    const codeEl = document.createElement("code");
+    codeEl.textContent = SRC_DATA[docKey] ? SRC_DATA[docKey].path : docKey;
+    errEl.append(codeEl, ": " + (err.message || String(err)));
+    main.replaceChildren(errEl);
     return;
   }
-  main.innerHTML = "";
-  main.appendChild(page);
+  main.replaceChildren(page);
   scheduleAlign();
   // Scroll/flash target
   if (eltId) {
@@ -1919,7 +1984,7 @@ document.addEventListener("input", (e) => {
   updateCommentText(docKey, eltId, cid, ta.value);
   // Live render preview
   const rendered = card.querySelector(".rendered");
-  if (rendered) rendered.innerHTML = renderCommentMarkdown(ta.value);
+  if (rendered) renderCommentMarkdownInto(rendered, ta.value);
   const meta = card.querySelector(".meta .save-status");
   if (meta) {
     meta.textContent = "saved " + new Date().toLocaleTimeString();
@@ -2006,9 +2071,13 @@ document.addEventListener("keydown", (e) => {
   try {
     await loadManifest();
   } catch (err) {
-    document.getElementById("content").innerHTML =
-      '<div class="doc-error">Failed to load <code>id-manifest.json</code>: ' +
-      escapeHtml(err.message || String(err)) + '</div>';
+    const errEl = document.createElement("div");
+    errEl.className = "doc-error";
+    errEl.append("Failed to load ");
+    const codeEl = document.createElement("code");
+    codeEl.textContent = "id-manifest.json";
+    errEl.append(codeEl, ": " + (err.message || String(err)));
+    document.getElementById("content").replaceChildren(errEl);
     return;
   }
   buildDocNav();
