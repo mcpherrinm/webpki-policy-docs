@@ -677,9 +677,8 @@ function citeAnchor(cite) {{
 function renderCitations(cits) {{
   if (!cits || cits.length === 0) return "";
   return '<div class="citations">' + cits.map((c) => {{
-    const label = c.sec ? c.src + " §" + c.sec : c.src;
-    const paren = c.paren ? " <span style=\\"opacity:0.7;font-size:10px;\\">(" + escapeHtml(c.paren) + ")</span>" : "";
-    return '<a class="cite-chip" href="#' + citeAnchor(c) + '" data-cite=\\'' + escapeHtml(JSON.stringify(c)) + '\\'>' +
+    const paren = c.paren ? ' <span style="opacity:0.7;font-size:10px;">(' + escapeHtml(c.paren) + ')</span>' : "";
+    return '<a class="cite-chip" href="#' + citeAnchor(c) + '">' +
            '<span class="src-name">' + escapeHtml(c.src) + '</span>' + (c.sec ? ' §' + escapeHtml(c.sec) : "") + paren +
            '</a>';
   }}).join("") + '</div>';
