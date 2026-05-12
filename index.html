@@ -185,100 +185,102 @@
     margin-bottom: 12px;
   }
 
-  /* Section row: grid with content + status gutter + N commentary columns */
+  /* Section row: a CSS grid where each commentable element produces 3+N
+     cells (ref, content, status, then one comments cell per source). The
+     grid auto-flows 3+N cells per row; each row's height is max(content,
+     comments), so tall comments push the next element's row down. */
   .section-row {
     display: grid;
-    grid-template-columns: 90px minmax(0, 1fr) 5px repeat(var(--side-count, 1), var(--side-width, 340px));
-    gap: 10px;
-    padding: 10px 0;
+    grid-template-columns:
+      [refs] 90px
+      [content] minmax(0, 1fr)
+      [status] 5px
+      [comments] repeat(var(--side-count, 1), var(--side-width, 340px));
+    column-gap: 10px;
+    row-gap: 4px;
+    padding: 6px 0;
+    align-items: start;
   }
 
-  /* Left ref gutter: one anchor per [data-elt-id], aligned with the element. */
-  .ref-col {
-    position: relative;
+  /* Per-element grid cells */
+  .elt-ref {
     font-family: ui-monospace, monospace;
     font-size: 10px;
-  }
-  .ref-col .ref-link {
-    position: absolute;
-    right: 0;
-    max-width: 100%;
     color: var(--muted);
-    text-decoration: none;
-    white-space: nowrap;
+    text-align: right;
+    padding-top: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 0 2px;
+    white-space: nowrap;
     line-height: 1.4;
   }
-  .ref-col .ref-link:hover { color: var(--accent); text-decoration: underline; }
-  .ref-col .ref-link.section-ref { font-weight: 700; color: var(--fg); }
+  .elt-ref a { color: inherit; text-decoration: none; }
+  .elt-ref a:hover { color: var(--accent); text-decoration: underline; }
+  .elt-ref.section-ref a { font-weight: 700; color: var(--fg); }
 
-  /* Status gutter (column 2) — colored segments aligned with each element. */
-  .status-strip-col {
-    position: relative;
+  .elt-status {
     min-width: 5px;
-  }
-  .status-seg {
-    position: absolute;
-    left: 0;
-    right: 0;
     border-radius: 2px;
+    align-self: stretch;
   }
-  .status-seg.compliant     { background: var(--ok); }
-  .status-seg.need-info     { background: var(--info); }
-  .status-seg.noncompliant  { background: var(--bad); }
-  .status-seg.na            { background: var(--na); }
-  .status-seg.unreviewed    { background: var(--unreviewed); }
+  .elt-status.compliant     { background: var(--ok); }
+  .elt-status.need-info     { background: var(--info); }
+  .elt-status.noncompliant  { background: var(--bad); }
+  .elt-status.na            { background: var(--na); }
+  .elt-status.unreviewed    { background: var(--unreviewed); }
 
-  /* Main content cell */
-  .section-content {
+  .elt-content {
     min-width: 0;
   }
-  .section-content h1, .section-content h2, .section-content h3,
-  .section-content h4, .section-content h5, .section-content h6 {
+  .elt-content > :first-child { margin-top: 0; }
+  .elt-content > :last-child  { margin-bottom: 0; }
+  .elt-content h1, .elt-content h2, .elt-content h3,
+  .elt-content h4, .elt-content h5, .elt-content h6 {
     scroll-margin-top: 80px;
     position: relative;
   }
-  .section-content h1 { font-size: 19px; border-bottom: 2px solid var(--border); padding-bottom: 3px; }
-  .section-content h2 { font-size: 17px; }
-  .section-content h3 { font-size: 15px; }
-  .section-content h4 { font-size: 14px; }
-  .section-content h5 { font-size: 13.5px; }
-  .section-content h6 { font-size: 13px; color: var(--muted); }
-  .section-content pre {
+  .elt-content h1 { font-size: 19px; border-bottom: 2px solid var(--border); padding-bottom: 3px; }
+  .elt-content h2 { font-size: 17px; }
+  .elt-content h3 { font-size: 15px; }
+  .elt-content h4 { font-size: 14px; }
+  .elt-content h5 { font-size: 13.5px; }
+  .elt-content h6 { font-size: 13px; color: var(--muted); }
+  .elt-content pre {
     background: var(--code-bg);
     border-radius: 4px;
     padding: 8px 10px;
     overflow-x: auto;
     font-size: 12px;
   }
-  .section-content code {
+  .elt-content code {
     background: var(--code-bg);
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 12.5px;
   }
-  .section-content pre code { background: none; padding: 0; }
-  .section-content table {
+  .elt-content pre code { background: none; padding: 0; }
+  .elt-content table {
     border-collapse: collapse;
-    margin: 10px 0;
+    margin: 0;
     font-size: 12.5px;
     max-width: 100%;
   }
-  .section-content table th, .section-content table td {
+  .elt-content table th, .elt-content table td {
     border: 1px solid var(--border);
     padding: 4px 8px;
     vertical-align: top;
   }
-  .section-content table th { background: var(--bg-alt); }
-  .section-content blockquote {
+  .elt-content table th { background: var(--bg-alt); }
+  /* Split single-item lists tighten up — drop the default top/bottom margin
+     so consecutive li-rows visually flow as one list. */
+  .elt-content > ul, .elt-content > ol { margin: 0; }
+  .elt-content blockquote {
     border-left: 3px solid var(--accent);
     background: var(--accent-bg);
     margin: 8px 0;
     padding: 6px 12px;
   }
-  .section-content a { color: var(--link); }
+  .elt-content a { color: var(--link); }
 
   /* Per-element commentable wrapper styling */
   [data-elt-id] {
@@ -346,31 +348,15 @@
     transform: translateY(-50%);
   }
 
-  /* Commentary column. Cards inside are absolutely-positioned so each one
-     aligns vertically with its target element in .section-content. The
-     column's min-height is set by JS once cards are placed; CSS grid then
-     stretches the whole row to match (so long comments push content down). */
-  .commentary-col {
+  /* One comments cell per row × per source (local + each loaded set).
+     Cards are in normal flow inside the cell; the cell's height stretches
+     its grid row so the next paragraph pushes down beyond all comments. */
+  .elt-comments {
     padding-left: 12px;
     min-width: 0;
-    position: relative;
-  }
-  .commentary-col .col-header {
-    font-size: 10px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 6px;
-    margin-bottom: 4px;
-  }
-  .commentary-col .col-header .set-name {
-    color: var(--fg);
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: 11px;
   }
   .comment-card {
     background: var(--note-bg);
@@ -378,10 +364,6 @@
     border-radius: 5px;
     padding: 6px 8px;
     font-size: 12.5px;
-    position: absolute;
-    left: 12px;
-    right: 4px;
-    transition: top 0.12s ease-out;
   }
   .comment-card.readonly {
     background: #f4f3ee;
@@ -590,11 +572,15 @@
   }
 
   @media (max-width: 1100px) {
+    /* Collapse the multi-column grid: each row becomes a 1-column block,
+       with the ref/status cells hidden and comments stacked below content. */
     .section-row { grid-template-columns: 1fr !important; }
-    .status-strip-col { display: none; }
-    .ref-col { display: none; }
-    .commentary-col { border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; min-height: 0 !important; }
-    .commentary-col .comment-card { position: static !important; left: auto !important; right: auto !important; margin-bottom: 6px; }
+    .elt-ref, .elt-status { display: none; }
+    .elt-comments {
+      border-top: 1px solid var(--border);
+      padding-left: 0;
+      padding-top: 6px;
+    }
     .elt-handle { right: 0; top: -22px; }
   }
 </style>
@@ -1081,11 +1067,15 @@ function slugify(s) {
 // ===== Document rendering =====
 //
 // Strategy: each top-level section (per heading) becomes its own .section-row
-// grid (content + commentary columns). To get this layout while letting marked.js
-// render naturally, we:
-//   1. Split the markdown into chunks at each heading.
-//   2. For each chunk: render with marked, wrap in .section-content, build a
-//      commentary column. Append to a doc-page container.
+// grid container. Within the grid, every commentable element (heading,
+// paragraph, top-level list item, table) produces 3+N cells in a row:
+// [ref] [content] [status] [comments-local] [comments-loaded-set ...]. The
+// row's height is max(content, comments), so tall comments stretch the row
+// and push the next paragraph down.
+//   1. Split markdown into chunks at each heading.
+//   2. For each chunk: render with marked into a temp container, assign
+//      eltIds in DFS order matching the manifest, then walk top-level
+//      children to emit per-element grid rows.
 
 function splitMarkdownAtHeadings(md) {
   // Returns [{heading: "...", level: N|null, body: "..."}]; first chunk has no heading.
@@ -1154,38 +1144,27 @@ async function renderDocPage(docKey) {
   for (const chunk of chunks) {
     // Skip empty preamble (no heading and no body) — common when doc starts with H1.
     if (!chunk.heading && !chunk.body.trim()) continue;
-    const row = document.createElement("div");
-    row.className = "section-row";
-
-    const content = document.createElement("div");
-    content.className = "section-content";
-    if (!chunk.heading) content.classList.add("preamble-block");
-
-    content.innerHTML = marked.parse(chunk.body || "");
 
     // Compute section id for this chunk.
-    let sectionId;
-    if (chunk.heading) {
-      sectionId = computeSectionFromHeading(chunk.heading, seenSections);
-    } else {
-      sectionId = "_preamble";
-    }
-    row.dataset.sectionId = sectionId;
+    const sectionId = chunk.heading
+      ? computeSectionFromHeading(chunk.heading, seenSections)
+      : "_preamble";
 
-    // Assign ids to elements within content.
-    annotateElementsWithIds(content, sectionId, docKey);
+    // Render the chunk's markdown into a temp container, assign eltIds in
+    // DFS order (so they match the manifest), then split the top-level
+    // children into per-element rows.
+    const tmp = document.createElement("div");
+    tmp.innerHTML = marked.parse(chunk.body || "");
+    annotateElementsWithIds(tmp, sectionId, docKey);
 
-    // Anchor for direct linking to this section (heading itself, if any).
-    const h = content.querySelector("h1, h2, h3, h4, h5, h6");
+    // The section's heading (h1..h6) is the first child here when present;
+    // tag it with the section anchor and add it to the TOC.
+    const h = tmp.querySelector("h1, h2, h3, h4, h5, h6");
     if (h) {
       h.id = "sec-" + sectionId.replace(/\./g, "-").replace(/\//g, "_");
       h.dataset.eltId = sectionId;
       h.dataset.eltKind = "section";
-
-      const handle = makeEltHandle(docKey, sectionId, "section");
-      h.appendChild(handle);
-
-      // Add to TOC
+      h.appendChild(makeEltHandle(docKey, sectionId, "section"));
       const link = document.createElement("a");
       link.href = "#" + docKey + "/" + sectionId;
       link.textContent = chunk.heading;
@@ -1193,23 +1172,167 @@ async function renderDocPage(docKey) {
       tocBox.appendChild(link);
     }
 
-    // Add ref gutter (left), content, status gutter, commentary column(s).
-    const refCol = document.createElement("div");
-    refCol.className = "ref-col";
-    row.appendChild(refCol);
-    row.appendChild(content);
-    const stripCol = document.createElement("div");
-    stripCol.className = "status-strip-col";
-    row.appendChild(stripCol);
-    row.appendChild(makeCommentaryColumn({ kind: "local", docKey, sectionId }));
-    for (const set of LOADED_SETS) {
-      row.appendChild(makeCommentaryColumn({ kind: "loaded", docKey, sectionId, set }));
+    const row = document.createElement("div");
+    row.className = "section-row";
+    row.dataset.sectionId = sectionId;
+
+    // For each top-level child of `tmp`, emit one or more grid rows.
+    for (const child of Array.from(tmp.children)) {
+      const tag = child.tagName.toLowerCase();
+      if (tag === "ul" || tag === "ol") {
+        appendListAsRows(row, child, docKey);
+      } else {
+        const eltId = child.dataset.eltId || null;
+        // Tables: every <tr> is commentable but the table itself isn't, so
+        // the row's primary eltId is null and the comments cell aggregates
+        // comments for every <tr> inside.
+        const extraIds = collectDescendantEltIds(child, eltId);
+        appendGridRow(row, {
+          docKey, eltId, contentEl: child,
+          commentEltIds: eltId ? [eltId, ...extraIds] : extraIds,
+        });
+      }
     }
 
     page.appendChild(row);
   }
 
   return page;
+}
+
+// Split a <ul>/<ol> into one grid row per direct <li>. Each row's content
+// is a single-item list of the same kind (preserving start= for ordered
+// lists) so the marker and indentation render naturally. Nested lists stay
+// inline within their parent <li>'s row, and the nested <li> eltIds are
+// aggregated into the parent row's comments cell.
+function appendListAsRows(row, listEl, docKey) {
+  const tag = listEl.tagName.toLowerCase();
+  const startAttr = listEl.getAttribute("start");
+  const baseStart = parseInt(startAttr || "1", 10);
+  const items = Array.from(listEl.children).filter(
+    (c) => c.tagName.toLowerCase() === "li"
+  );
+  items.forEach((li, idx) => {
+    const eltId = li.dataset.eltId || null;
+    const wrap = document.createElement(tag);
+    if (tag === "ol") wrap.setAttribute("start", String(baseStart + idx));
+    wrap.appendChild(li);
+    const extraIds = collectDescendantEltIds(wrap, eltId);
+    appendGridRow(row, {
+      docKey, eltId, contentEl: wrap,
+      commentEltIds: eltId ? [eltId, ...extraIds] : extraIds,
+    });
+  });
+}
+
+// Walk content for descendant elements carrying data-elt-id and return
+// their ids (in document order). Skips elt-handle spans and the primary
+// element itself.
+function collectDescendantEltIds(contentEl, primaryEltId) {
+  const ids = [];
+  contentEl.querySelectorAll("[data-elt-id]").forEach((el) => {
+    if (el.classList.contains("elt-handle")) return;
+    const id = el.dataset.eltId;
+    if (!id || id === primaryEltId) return;
+    ids.push(id);
+  });
+  return ids;
+}
+
+// Append one grid row (3+N cells: ref, content, status, plus one comments
+// cell per source) for the given element.
+//   eltId         — primary commentable id (drives ref, status, "add comment"
+//                   click target). May be null for non-commentable wrappers
+//                   (a <table> whose tr's are the commentable units).
+//   commentEltIds — list of eltIds whose comments aggregate into this row's
+//                   comments cells (defaults to [eltId]). Lets a single row
+//                   surface comments for several nested elements.
+function appendGridRow(row, { docKey, eltId, contentEl, commentEltIds }) {
+  const commentIds = commentEltIds || (eltId ? [eltId] : []);
+
+  // Ref cell
+  const refCell = document.createElement("div");
+  refCell.className = "elt-ref";
+  if (eltId) {
+    const isSection = !eltId.includes("/");
+    if (isSection) refCell.classList.add("section-ref");
+    const a = document.createElement("a");
+    a.href = "#" + docKey + "/" + eltId;
+    a.textContent = formatRefSymbol(eltId);
+    a.title = docKey + "/" + eltId;
+    refCell.appendChild(a);
+  }
+  row.appendChild(refCell);
+
+  // Content cell
+  const contentCell = document.createElement("div");
+  contentCell.className = "elt-content";
+  contentCell.appendChild(contentEl);
+  row.appendChild(contentCell);
+
+  // Status cell
+  const statusCell = document.createElement("div");
+  statusCell.className = "elt-status";
+  if (eltId) statusCell.dataset.eltId = eltId;
+  paintStatusCell(statusCell, docKey, eltId);
+  row.appendChild(statusCell);
+
+  // Comments cells — one per source (local, then each loaded set).
+  row.appendChild(makeCommentsCell({ kind: "local", docKey, eltId, commentIds }));
+  for (const set of LOADED_SETS) {
+    row.appendChild(makeCommentsCell({ kind: "loaded", docKey, eltId, commentIds, set }));
+  }
+}
+
+function makeCommentsCell({ kind, docKey, eltId, commentIds, set }) {
+  const cell = document.createElement("div");
+  cell.className = "elt-comments";
+  cell.dataset.docKey = docKey;
+  if (eltId) cell.dataset.eltId = eltId;
+  if (commentIds && commentIds.length) {
+    cell.dataset.commentIds = commentIds.join(",");
+  }
+  if (kind === "local") {
+    cell.dataset.colKind = "local";
+  } else {
+    cell.dataset.colKind = "loaded";
+    cell.dataset.setId = set.id;
+  }
+  renderCommentsCell(cell);
+  return cell;
+}
+
+function renderCommentsCell(cell) {
+  const docKey = cell.dataset.docKey;
+  const idsAttr = cell.dataset.commentIds || cell.dataset.eltId || "";
+  const ids = idsAttr ? idsAttr.split(",") : [];
+  cell.replaceChildren();
+  if (ids.length === 0) return;
+  const isLocal = cell.dataset.colKind === "local";
+  let docMap;
+  if (isLocal) {
+    docMap = allCommentsForDoc(docKey);
+  } else {
+    const set = LOADED_SETS.find((s) => s.id === cell.dataset.setId);
+    docMap = set ? (set.comments[docKey] || {}) : {};
+  }
+  for (const eid of ids) {
+    const comments = docMap[eid] || [];
+    for (const c of comments) {
+      cell.appendChild(renderCommentCard({
+        docKey, eltId: eid, comment: c, readonly: !isLocal,
+      }));
+    }
+  }
+}
+
+function paintStatusCell(cell, docKey, eltId) {
+  // Strip any previous status class.
+  cell.classList.remove("compliant", "need-info", "noncompliant", "na", "unreviewed");
+  if (!eltId) return;
+  // resolvedElementStatus already falls back to the section's own status.
+  const s = resolvedElementStatus(docKey, eltId) || "unreviewed";
+  cell.classList.add(s);
 }
 
 function annotateElementsWithIds(content, sectionId, docKey) {
@@ -1321,185 +1444,36 @@ function cssEscape(s) {
   return String(s).replace(/(["\\#.:/])/g, "\\$&");
 }
 
-// ===== Commentary column =====
-function makeCommentaryColumn({ kind, docKey, sectionId, set }) {
-  const col = document.createElement("div");
-  col.className = "commentary-col";
-  col.dataset.docKey = docKey;
-  col.dataset.sectionId = sectionId;
-  if (kind === "local") {
-    col.dataset.colKind = "local";
-    col.replaceChildren();
-  } else {
-    col.dataset.colKind = "loaded";
-    col.dataset.setId = set.id;
-    col.innerHTML = '<div class="col-header"><span class="set-name"></span></div>';
-    col.querySelector(".set-name").textContent = set.name;
-  }
-  renderCommentaryColumn(col);
-  return col;
-}
-
-function renderCommentaryColumn(col) {
-  const docKey = col.dataset.docKey;
-  const sectionId = col.dataset.sectionId;
-  const isLocal = col.dataset.colKind === "local";
-  const setId = col.dataset.setId;
-  const set = setId ? LOADED_SETS.find((s) => s.id === setId) : null;
-
-  // Find all elements in this section that have comments in this col's source.
-  let source;
-  if (isLocal) {
-    source = allCommentsForDoc(docKey);
-  } else {
-    source = set ? (set.comments[docKey] || {}) : {};
-  }
-  const eltIds = Object.keys(source).filter((eid) => eid === sectionId || eid.startsWith(sectionId + "/"));
-  // sort: section itself first, then by elt order (p < li < tr) and by ordinal
-  eltIds.sort(compareEltIds);
-
-  // Remove old comment cards from this column (preserve header)
-  const header = col.querySelector(".col-header");
-  col.replaceChildren(...(header ? [header] : []));
-
-  if (eltIds.length === 0) {
-    // empty column — no per-section hint, the doc-meta line covers usage.
-  } else {
-    for (const eid of eltIds) {
-      const comments = source[eid] || [];
-      for (const c of comments) {
-        col.appendChild(renderCommentCard({
-          docKey, eltId: eid, comment: c, readonly: !isLocal,
-        }));
-      }
-    }
-  }
-}
-
-// Align each comment card vertically with its target element. Cards are
-// absolutely positioned within their commentary column; we set `top` so it
-// matches the target's offset within the section row, then resolve overlaps
-// by pushing later cards down. The column's min-height is set so CSS grid
-// stretches the whole row when comments are collectively taller than content.
-function alignSectionRowComments(row) {
-  if (!row || !row.querySelector) return;
-  const content = row.querySelector(".section-content");
-  if (!content) return;
-  // Skip on narrow viewports where the layout collapses to a single column.
-  if (window.innerWidth <= 1100) {
-    row.querySelectorAll(".commentary-col").forEach((col) => { col.style.minHeight = ""; });
-    return;
-  }
-  const rowRect = row.getBoundingClientRect();
-  const cols = row.querySelectorAll(".commentary-col");
-  cols.forEach((col) => {
-    const cards = Array.from(col.querySelectorAll(".comment-card"));
-    if (cards.length === 0) {
-      col.style.minHeight = "";
-      return;
-    }
-    const placed = cards.map((card) => {
-      const target = content.querySelector('[data-elt-id="' + cssEscape(card.dataset.eltId) + '"]');
-      const targetTop = target ? (target.getBoundingClientRect().top - rowRect.top) : 0;
-      return { card, targetTop };
-    });
-    placed.sort((a, b) => a.targetTop - b.targetTop);
-    let prevBottom = 0;
-    const gap = 6;
-    for (const p of placed) {
-      const top = Math.max(p.targetTop, prevBottom);
-      p.card.style.top = top + "px";
-      prevBottom = top + p.card.offsetHeight + gap;
-    }
-    col.style.minHeight = prevBottom + "px";
-  });
-}
-
-function alignAllSectionRows() {
-  document.querySelectorAll(".section-row").forEach(alignSectionRowComments);
-}
-
-// Paint the status gutter and the unreviewed tint for every commentable element
-// in a section. The gutter fills the entire section span with the section's
-// own status (if any), then overlays each element's own status on top.
-function decorateSection(row) {
-  if (!row || !row.querySelector) return;
-  const content = row.querySelector(".section-content");
-  const strip = row.querySelector(".status-strip-col");
-  const refCol = row.querySelector(".ref-col");
-  if (!content || !strip) return;
-  const page = row.closest(".doc-page");
-  if (!page) return;
-  const docKey = page.dataset.docKey;
-  const sectionId = row.dataset.sectionId;
-  strip.replaceChildren();
-  if (refCol) refCol.replaceChildren();
-
-  if (window.innerWidth > 1100) {
-    const rowRect = row.getBoundingClientRect();
-    // 1) Section-wide fill: section's own status if set, else "unreviewed".
-    //    Per-element segments draw on top of this.
-    const secStatus = ownElementStatus(docKey, sectionId) || "unreviewed";
-    const headingEl = content.querySelector('[data-elt-id="' + cssEscape(sectionId) + '"]');
-    const startTop = headingEl ? (headingEl.getBoundingClientRect().top - rowRect.top) : 0;
-    const endTop = row.offsetHeight;
-    const seg = document.createElement("div");
-    seg.className = "status-seg " + secStatus;
-    seg.style.top = startTop + "px";
-    seg.style.height = Math.max(0, endTop - startTop) + "px";
-    strip.appendChild(seg);
-
-    // 2) Per-element overrides — only elements with their own explicit status.
-    content.querySelectorAll("[data-elt-id]:not(.elt-handle)").forEach((el) => {
-      const eid = el.dataset.eltId;
-      if (eid === sectionId) return; // section span already painted
-      const own = ownElementStatus(docKey, eid);
-      if (!own) return;
-      const rect = el.getBoundingClientRect();
-      const s = document.createElement("div");
-      s.className = "status-seg " + own;
-      s.style.top = (rect.top - rowRect.top) + "px";
-      s.style.height = rect.height + "px";
-      strip.appendChild(s);
-    });
-
-    // 3) Left ref gutter: a clickable symbolic ref aligned with each element.
-    if (refCol) {
-      content.querySelectorAll("[data-elt-id]:not(.elt-handle)").forEach((el) => {
-        const eid = el.dataset.eltId;
-        const rect = el.getBoundingClientRect();
-        const a = document.createElement("a");
-        a.className = "ref-link" + (eid === sectionId ? " section-ref" : "");
-        a.href = "#" + docKey + "/" + eid;
-        a.textContent = formatRefSymbol(eid);
-        a.title = docKey + "/" + eid;
-        a.style.top = (rect.top - rowRect.top) + "px";
-        refCol.appendChild(a);
+// ===== Status painting =====
+// The per-element layout means there is no longer a status "gutter"
+// spanning a whole section — each row's .elt-status cell paints its own
+// status. Repaint every cell on a status change for a given (doc, elt).
+function repaintStatusFor(docKey, eltId) {
+  document
+    .querySelectorAll(
+      '.elt-status[data-elt-id="' + cssEscape(eltId) + '"]'
+    )
+    .forEach((cell) => paintStatusCell(cell, docKey, eltId));
+  // The section's status also feeds the resolved status of every element
+  // under it; if a section heading's status changed, repaint the whole
+  // section's cells too.
+  if (!eltId.includes("/")) {
+    document
+      .querySelectorAll(
+        '.section-row[data-section-id="' + cssEscape(eltId) + '"] .elt-status'
+      )
+      .forEach((cell) => {
+        const id = cell.dataset.eltId;
+        if (id) paintStatusCell(cell, docKey, id);
       });
-    }
   }
 }
 
-function decorateAllSections() {
-  document.querySelectorAll(".section-row").forEach(decorateSection);
-}
-
-let _alignScheduled = false;
-function scheduleAlign() {
-  if (_alignScheduled) return;
-  _alignScheduled = true;
-  requestAnimationFrame(() => {
-    _alignScheduled = false;
-    alignAllSectionRows();
-    decorateAllSections();
-  });
-}
-
-let _resizeTimer = null;
-window.addEventListener("resize", () => {
-  clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => { alignAllSectionRows(); decorateAllSections(); }, 80);
-});
+// CSS grid handles vertical alignment of comments-vs-content now; no JS
+// positioning is required. These stubs remain so the comment add/delete
+// handlers and the resize listener can keep calling them without a flag-day
+// rewrite of every call site.
+function scheduleAlign() {}
 
 function compareEltIds(a, b) {
   // section itself sorts first; then by kind p < li < tr; then by ordinal.
@@ -1902,8 +1876,7 @@ document.addEventListener("mousedown", (e) => {
     card.querySelectorAll(".review-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.reviewValue === next);
     });
-    const row = card.closest(".section-row");
-    if (row) decorateSection(row);
+    repaintStatusFor(docKey, eltId);
     refreshAllHandlesFor(docKey, eltId);
     return;
   }
@@ -1963,62 +1936,66 @@ document.addEventListener("click", (e) => {
     if (!snap) return;
     pushUndo("Delete comment", () => {
       insertCommentAt(docKey, eltId, snap.comment, snap.index);
-      const col = document.querySelector(
-        '.section-row[data-section-id="' + cssEscape(eltId.includes("/") ? eltId.substring(0, eltId.indexOf("/")) : eltId) + '"] .commentary-col[data-col-kind="local"]'
-      );
-      if (col) renderCommentaryColumn(col);
+      const cell = findLocalCommentsCell(docKey, eltId);
+      if (cell) renderCommentsCell(cell);
+      repaintStatusFor(docKey, eltId);
       refreshAllHandlesFor(docKey, eltId);
-      scheduleAlign();
     });
-    // Re-render the local commentary column that contains this card.
-    const col = card.closest(".commentary-col");
-    card.remove();
-    if (col && !col.querySelector(".comment-card")) renderCommentaryColumn(col);
+    // Re-render just the cell that contained this card.
+    const cell = card.closest(".elt-comments");
+    if (cell) renderCommentsCell(cell);
+    repaintStatusFor(docKey, eltId);
     refreshAllHandlesFor(docKey, eltId);
-    scheduleAlign();
     return;
   }
 });
+
+function findLocalCommentsCell(docKey, eltId) {
+  // Exact match (primary eltId on the cell).
+  const exact = document.querySelector(
+    '.elt-comments[data-col-kind="local"][data-doc-key="' + cssEscape(docKey) +
+    '"][data-elt-id="' + cssEscape(eltId) + '"]'
+  );
+  if (exact) return exact;
+  // Aggregated match: a cell listing eltId among its comment-ids (e.g., a
+  // table row's cell that gathers all its <tr> ids).
+  const cells = document.querySelectorAll(
+    '.elt-comments[data-col-kind="local"][data-doc-key="' + cssEscape(docKey) + '"][data-comment-ids]'
+  );
+  for (const cell of cells) {
+    const ids = (cell.dataset.commentIds || "").split(",");
+    if (ids.includes(eltId)) return cell;
+  }
+  return null;
+}
 
 function onHandleClicked(handle) {
   const docKey = handle.dataset.docKey;
   const eltId = handle.dataset.eltId;
   if (!docKey || !eltId) return;
-  // Find the local commentary column for this section.
-  const sectionId = eltId.includes("/") ? eltId.substring(0, eltId.indexOf("/")) : eltId;
-  const localCol = document.querySelector(
-    '.section-row[data-section-id="' + cssEscape(sectionId) + '"] .commentary-col[data-col-kind="local"]'
+  const cell = findLocalCommentsCell(docKey, eltId);
+  if (!cell) return;
+  // If this elt already has a local comment in the cell, focus the last one.
+  const existing = cell.querySelectorAll(
+    '.comment-card[data-elt-id="' + cssEscape(eltId) + '"]'
   );
-  if (!localCol) return;
-  // If this elt already has a local comment, focus the last one (no scroll).
-  const existing = localCol.querySelectorAll('.comment-card[data-elt-id="' + cssEscape(eltId) + '"]');
   if (existing.length > 0) {
     const last = existing[existing.length - 1];
     const ta = last.querySelector("textarea");
     if (ta) ta.focus({ preventScroll: true });
     return;
   }
-  // Otherwise: create a fresh empty comment and focus it without scrolling.
+  // Otherwise: create a fresh empty comment, re-render to keep cards in
+  // eltId order (matters when the cell aggregates several elt-ids), then
+  // focus the new card's textarea.
   const c = addComment(docKey, eltId, "");
-  const card = renderCommentCard({ docKey, eltId, comment: c, readonly: false });
-  insertCardSorted(localCol, card);
+  renderCommentsCell(cell);
   refreshAllHandlesFor(docKey, eltId);
-  scheduleAlign();
-  const ta = card.querySelector("textarea");
+  const newCard = cell.querySelector(
+    '.comment-card[data-comment-id="' + cssEscape(c.id) + '"]'
+  );
+  const ta = newCard ? newCard.querySelector("textarea") : null;
   if (ta) ta.focus({ preventScroll: true });
-}
-
-function insertCardSorted(col, card) {
-  const eid = card.dataset.eltId;
-  const cards = col.querySelectorAll(".comment-card");
-  for (const c of cards) {
-    const r = compareEltIds(eid, c.dataset.eltId);
-    if (r < 0) {
-      col.insertBefore(card, c);
-      return;
-    }
-  }
-  col.appendChild(card);
 }
 
 // Blur on a comment textarea → delete the comment if it has no text AND no
@@ -2035,11 +2012,11 @@ document.addEventListener("focusout", (e) => {
   const eltId = card.dataset.eltId;
   const cid = card.dataset.commentId;
   deleteComment(docKey, eltId, cid);
-  const col = card.closest(".commentary-col");
-  card.remove();
-  if (col && !col.querySelector(".comment-card")) renderCommentaryColumn(col);
+  const cell = card.closest(".elt-comments");
+  if (cell) renderCommentsCell(cell);
+  else card.remove();
+  repaintStatusFor(docKey, eltId);
   refreshAllHandlesFor(docKey, eltId);
-  scheduleAlign();
 });
 
 // Textarea live editing
