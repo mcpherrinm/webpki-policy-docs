@@ -103,12 +103,13 @@ OVERRIDES = {
             ),
         },
         "2.2/li2": {
-            "status": "noncompliant",
+            "status": "compliant",
             "text": (
                 "BR 3.2.2.4.7 'DNS Change' is the dns-01 challenge family. Boulder "
-                "supports dns-01 (RFC 8555) in `va/dns.go` — note that ACME dns-01 maps to "
-                "BR 3.2.2.4.7. Compliant with intent of the requirement (validation via "
-                "DNS change), though Apple lists the specific BR method numbers."
+                "implements it in `va/dns.go` (validateDNS01, places the key "
+                "authorization in a `_acme-challenge.<domain>` TXT record). The "
+                "parent rule only requires support for at least one method from "
+                "this list; Boulder satisfies it via 4.7, 4.19, and 4.20."
             ),
         },
         "2.2/li3": {

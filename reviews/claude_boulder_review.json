@@ -11423,10 +11423,10 @@
       "2.2/li2": [
         {
           "id": "c-rev-ov-apple-2-2_li2",
-          "text": "BR 3.2.2.4.7 'DNS Change' is the dns-01 challenge family. Boulder supports dns-01 (RFC 8555) in `va/dns.go` \u2014 note that ACME dns-01 maps to BR 3.2.2.4.7. Compliant with intent of the requirement (validation via DNS change), though Apple lists the specific BR method numbers.",
+          "text": "BR 3.2.2.4.7 'DNS Change' is the dns-01 challenge family. Boulder implements it in `va/dns.go` (validateDNS01, places the key authorization in a `_acme-challenge.<domain>` TXT record). The parent rule only requires support for at least one method from this list; Boulder satisfies it via 4.7, 4.19, and 4.20.",
           "createdAt": "2026-05-12T00:00:00.000Z",
           "updatedAt": "2026-05-12T00:00:00.000Z",
-          "status": "noncompliant"
+          "status": "compliant"
         }
       ],
       "2.2/li3": [
