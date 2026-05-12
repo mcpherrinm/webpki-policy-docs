@@ -589,14 +589,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     transform: translateY(-50%);
   }}
 
-  /* Commentary column */
+  /* Commentary column. Cards inside are absolutely-positioned so each one
+     aligns vertically with its target element in .section-content. The
+     column's min-height is set by JS once cards are placed; CSS grid then
+     stretches the whole row to match (so long comments push content down). */
   .commentary-col {{
     border-left: 1px solid var(--border);
     padding-left: 12px;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    position: relative;
   }}
   .commentary-col .col-header {{
     font-size: 10px;
@@ -606,6 +607,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-bottom: 4px;
   }}
   .commentary-col .col-header .set-name {{
     color: var(--fg);
@@ -620,7 +622,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     border-radius: 5px;
     padding: 6px 8px;
     font-size: 12.5px;
-    position: relative;
+    position: absolute;
+    left: 12px;
+    right: 4px;
+    transition: top 0.12s ease-out;
   }}
   .comment-card.readonly {{
     background: #f4f3ee;
@@ -799,7 +804,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   @media (max-width: 1100px) {{
     .section-row {{ grid-template-columns: 1fr !important; }}
-    .commentary-col {{ border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; }}
+    .commentary-col {{ border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; min-height: 0 !important; }}
+    .commentary-col .comment-card {{ position: static !important; left: auto !important; right: auto !important; margin-bottom: 6px; }}
     .elt-handle {{ right: 0; top: -22px; }}
   }}
 </style>
@@ -1353,6 +1359,65 @@ function renderCommentaryColumn(col) {{
   }}
 }}
 
+// Align each comment card vertically with its target element. Cards are
+// absolutely positioned within their commentary column; we set `top` so it
+// matches the target's offset within the section row, then resolve overlaps
+// by pushing later cards down. The column's min-height is set so CSS grid
+// stretches the whole row when comments are collectively taller than content.
+function alignSectionRowComments(row) {{
+  if (!row || !row.querySelector) return;
+  const content = row.querySelector(".section-content");
+  if (!content) return;
+  // Skip on narrow viewports where the layout collapses to a single column.
+  if (window.innerWidth <= 1100) {{
+    row.querySelectorAll(".commentary-col").forEach((col) => {{ col.style.minHeight = ""; }});
+    return;
+  }}
+  const rowRect = row.getBoundingClientRect();
+  const cols = row.querySelectorAll(".commentary-col");
+  cols.forEach((col) => {{
+    const cards = Array.from(col.querySelectorAll(".comment-card"));
+    if (cards.length === 0) {{
+      col.style.minHeight = "";
+      return;
+    }}
+    const placed = cards.map((card) => {{
+      const target = content.querySelector('[data-elt-id="' + cssEscape(card.dataset.eltId) + '"]');
+      const targetTop = target ? (target.getBoundingClientRect().top - rowRect.top) : 0;
+      return {{ card, targetTop }};
+    }});
+    placed.sort((a, b) => a.targetTop - b.targetTop);
+    let prevBottom = 0;
+    const gap = 6;
+    for (const p of placed) {{
+      const top = Math.max(p.targetTop, prevBottom);
+      p.card.style.top = top + "px";
+      prevBottom = top + p.card.offsetHeight + gap;
+    }}
+    col.style.minHeight = prevBottom + "px";
+  }});
+}}
+
+function alignAllSectionRows() {{
+  document.querySelectorAll(".section-row").forEach(alignSectionRowComments);
+}}
+
+let _alignScheduled = false;
+function scheduleAlign() {{
+  if (_alignScheduled) return;
+  _alignScheduled = true;
+  requestAnimationFrame(() => {{
+    _alignScheduled = false;
+    alignAllSectionRows();
+  }});
+}}
+
+let _resizeTimer = null;
+window.addEventListener("resize", () => {{
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(alignAllSectionRows, 80);
+}});
+
 function compareEltIds(a, b) {{
   // section itself sorts first; then by kind p < li < tr; then by ordinal.
   function key(s) {{
@@ -1616,6 +1681,7 @@ function renderRoute(docKey, eltId) {{
   const btn = document.querySelector('.navbtn[data-doc="' + cssEscape(docKey) + '"]');
   if (btn) btn.classList.add("active");
   main.appendChild(renderDocPage(docKey));
+  scheduleAlign();
   // Scroll/flash target
   if (eltId) {{
     setTimeout(() => {{
@@ -1692,6 +1758,7 @@ document.addEventListener("click", (e) => {{
     card.remove();
     if (col && !col.querySelector(".comment-card")) renderCommentaryColumn(col);
     refreshAllHandlesFor(docKey, eltId);
+    scheduleAlign();
     return;
   }}
 }});
@@ -1721,6 +1788,7 @@ function onHandleClicked(handle) {{
   // Insert in column at sorted position.
   insertCardSorted(localCol, card);
   refreshAllHandlesFor(docKey, eltId);
+  scheduleAlign();
   card.scrollIntoView({{ block: "center", behavior: "smooth" }});
   const ta = card.querySelector("textarea");
   if (ta) ta.focus();
@@ -1754,6 +1822,7 @@ document.addEventListener("focusout", (e) => {{
   card.remove();
   if (col && !col.querySelector(".comment-card")) renderCommentaryColumn(col);
   refreshAllHandlesFor(docKey, eltId);
+  scheduleAlign();
 }});
 
 // Textarea live editing
@@ -1775,6 +1844,7 @@ document.addEventListener("input", (e) => {{
     clearTimeout(meta._t);
     meta._t = setTimeout(() => {{ meta.textContent = ""; }}, 2200);
   }}
+  scheduleAlign();
 }});
 
 // ===== Export / Import =====
