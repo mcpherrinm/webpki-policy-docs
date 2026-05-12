@@ -188,13 +188,31 @@
   /* Section row: grid with content + status gutter + N commentary columns */
   .section-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 5px repeat(var(--side-count, 1), var(--side-width, 340px));
+    grid-template-columns: 90px minmax(0, 1fr) 5px repeat(var(--side-count, 1), var(--side-width, 340px));
     gap: 10px;
     padding: 10px 0;
-    border-top: 1px solid var(--border);
   }
-  .section-row.first { border-top: none; }
-  .section-row.preamble { border-top: none; }
+
+  /* Left ref gutter: one anchor per [data-elt-id], aligned with the element. */
+  .ref-col {
+    position: relative;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+  }
+  .ref-col .ref-link {
+    position: absolute;
+    right: 0;
+    max-width: 100%;
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 2px;
+    line-height: 1.4;
+  }
+  .ref-col .ref-link:hover { color: var(--accent); text-decoration: underline; }
+  .ref-col .ref-link.section-ref { font-weight: 700; color: var(--fg); }
 
   /* Status gutter (column 2) — colored segments aligned with each element. */
   .status-strip-col {
@@ -305,7 +323,6 @@
   }
   [data-elt-id]:hover > .elt-handle,
   tr[data-elt-id]:hover .elt-handle.row-handle,
-  .elt-handle.has-comments,
   .elt-handle.active-target {
     opacity: 1;
   }
@@ -334,7 +351,6 @@
      column's min-height is set by JS once cards are placed; CSS grid then
      stretches the whole row to match (so long comments push content down). */
   .commentary-col {
-    border-left: 1px solid var(--border);
     padding-left: 12px;
     min-width: 0;
     position: relative;
@@ -576,6 +592,7 @@
   @media (max-width: 1100px) {
     .section-row { grid-template-columns: 1fr !important; }
     .status-strip-col { display: none; }
+    .ref-col { display: none; }
     .commentary-col { border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; min-height: 0 !important; }
     .commentary-col .comment-card { position: static !important; left: auto !important; right: auto !important; margin-bottom: 6px; }
     .elt-handle { right: 0; top: -22px; }
@@ -1097,13 +1114,11 @@ async function renderDocPage(docKey) {
   const chunks = splitMarkdownAtHeadings(md);
   const seenSections = {};
 
-  let isFirst = true;
   for (const chunk of chunks) {
     // Skip empty preamble (no heading and no body) — common when doc starts with H1.
     if (!chunk.heading && !chunk.body.trim()) continue;
     const row = document.createElement("div");
-    row.className = "section-row" + (isFirst ? " first" : "");
-    isFirst = false;
+    row.className = "section-row";
 
     const content = document.createElement("div");
     content.className = "section-content";
@@ -1141,7 +1156,10 @@ async function renderDocPage(docKey) {
       tocBox.appendChild(link);
     }
 
-    // Add commentary column(s)
+    // Add ref gutter (left), content, status gutter, commentary column(s).
+    const refCol = document.createElement("div");
+    refCol.className = "ref-col";
+    row.appendChild(refCol);
     row.appendChild(content);
     const stripCol = document.createElement("div");
     stripCol.className = "status-strip-col";
@@ -1371,12 +1389,14 @@ function decorateSection(row) {
   if (!row || !row.querySelector) return;
   const content = row.querySelector(".section-content");
   const strip = row.querySelector(".status-strip-col");
+  const refCol = row.querySelector(".ref-col");
   if (!content || !strip) return;
   const page = row.closest(".doc-page");
   if (!page) return;
   const docKey = page.dataset.docKey;
   const sectionId = row.dataset.sectionId;
   strip.replaceChildren();
+  if (refCol) refCol.replaceChildren();
 
   if (window.innerWidth > 1100) {
     const rowRect = row.getBoundingClientRect();
@@ -1405,6 +1425,21 @@ function decorateSection(row) {
       s.style.height = rect.height + "px";
       strip.appendChild(s);
     });
+
+    // 3) Left ref gutter: a clickable symbolic ref aligned with each element.
+    if (refCol) {
+      content.querySelectorAll("[data-elt-id]").forEach((el) => {
+        const eid = el.dataset.eltId;
+        const rect = el.getBoundingClientRect();
+        const a = document.createElement("a");
+        a.className = "ref-link" + (eid === sectionId ? " section-ref" : "");
+        a.href = "#" + docKey + "/" + eid;
+        a.textContent = formatRefSymbol(eid);
+        a.title = docKey + "/" + eid;
+        a.style.top = (rect.top - rowRect.top) + "px";
+        refCol.appendChild(a);
+      });
+    }
   }
 }
 
