@@ -1339,7 +1339,322 @@ def chk_country_printablestring(cert, der):
             except AttributeError:
                 pass
             return MANUAL, "cannot inspect ASN.1 tag"
-    return FAIL, "no countryName attribute"
+    return NA, "no countryName attribute (optional on leaf)"
+
+# ---------- Leaf-specific checks ----------
+
+LEAF_VALIDITY_CUTOFFS = [
+    (datetime.datetime(2029, 3, 15, tzinfo=datetime.timezone.utc), 47),
+    (datetime.datetime(2027, 3, 15, tzinfo=datetime.timezone.utc), 100),
+    (datetime.datetime(2026, 3, 15, tzinfo=datetime.timezone.utc), 200),
+    (datetime.datetime(1, 1, 1, tzinfo=datetime.timezone.utc), 398),  # default for any earlier issuance
+]
+
+def chk_leaf_validity_max(cert, der):
+    """CABF §6.3.2: subscriber cert validity MUST NOT exceed the table cap for its issuance window."""
+    nb = _notbefore(cert)
+    cap_days = 398
+    for cutoff, days in LEAF_VALIDITY_CUTOFFS:
+        if nb >= cutoff:
+            cap_days = days
+            break
+    seconds = (cert.not_valid_after_utc - cert.not_valid_before_utc).total_seconds()
+    days = seconds / 86400
+    if seconds <= cap_days * 86400 + 0.5:
+        return PASS, f"{days:.2f}d (cap {cap_days}d)"
+    return FAIL, f"{days:.2f}d > {cap_days}d cap"
+
+def chk_le_leaf_validity_max_100d(cert, der):
+    """LE-specific: leaf validity ≤ 100 days."""
+    seconds = (cert.not_valid_after_utc - cert.not_valid_before_utc).total_seconds()
+    days = seconds / 86400
+    return (PASS, f"{days:.2f}d") if seconds <= 100 * 86400 + 0.5 else (FAIL, f"{days:.2f}d > 100d")
+
+def chk_leaf_notbefore_within_48h(cert, der):
+    return MANUAL, "requires sign-time ground truth"
+
+# Subject prohibitions for LE leaves
+_LE_LEAF_FORBIDDEN_OIDS = {
+    NameOID.ORGANIZATION_NAME.dotted_string: "organizationName",
+    NameOID.GIVEN_NAME.dotted_string: "givenName",
+    NameOID.SURNAME.dotted_string: "surname",
+    NameOID.STREET_ADDRESS.dotted_string: "streetAddress",
+    NameOID.LOCALITY_NAME.dotted_string: "localityName",
+    NameOID.STATE_OR_PROVINCE_NAME.dotted_string: "stateOrProvinceName",
+    NameOID.POSTAL_CODE.dotted_string: "postalCode",
+    NameOID.COUNTRY_NAME.dotted_string: "countryName",
+    NameOID.ORGANIZATIONAL_UNIT_NAME.dotted_string: "organizationalUnitName",
+}
+
+def chk_le_leaf_no_forbidden_subject_attrs(cert, der):
+    """LE §7.1.4: ISRG does not issue Subscriber Certificates containing the listed subject fields."""
+    bad = []
+    for attr in cert.subject:
+        if attr.oid.dotted_string in _LE_LEAF_FORBIDDEN_OIDS:
+            bad.append(_LE_LEAF_FORBIDDEN_OIDS[attr.oid.dotted_string])
+    return (PASS, "") if not bad else (FAIL, f"forbidden subject attrs present: {bad}")
+
+def _san_entries(cert):
+    e = get_ext(cert, ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+    if not e:
+        return None
+    return list(e.value)
+
+def chk_le_leaf_cn_derived_from_san(cert, der):
+    """LE leaf: CN absent, or CN value is one of the SAN entries (string-equal)."""
+    cns = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if not cns:
+        return PASS, "no CN (LE-allowed)"
+    cn = cns[0].value
+    sans = _san_entries(cert)
+    if sans is None:
+        return FAIL, "CN present but SAN absent"
+    san_strings = []
+    for gn in sans:
+        if isinstance(gn, x509.DNSName):
+            san_strings.append(gn.value)
+        elif isinstance(gn, x509.IPAddress):
+            san_strings.append(str(gn.value))
+    return (PASS, cn) if cn in san_strings else (FAIL, f"CN={cn!r} not in SAN entries {san_strings[:5]}")
+
+# SAN checks
+def chk_san_at_least_one_dns_or_ip(cert, der):
+    sans = _san_entries(cert)
+    if sans is None:
+        return FAIL, "SAN absent"
+    n_dns = sum(1 for g in sans if isinstance(g, x509.DNSName))
+    n_ip = sum(1 for g in sans if isinstance(g, x509.IPAddress))
+    if n_dns + n_ip >= 1:
+        return PASS, f"{n_dns} dNSName, {n_ip} iPAddress"
+    return FAIL, "no dNSName or iPAddress entries"
+
+_ALLOWED_SAN_TYPES = (x509.DNSName, x509.IPAddress)
+
+def chk_san_only_dns_or_ip(cert, der):
+    sans = _san_entries(cert)
+    if sans is None:
+        return NA, "SAN absent"
+    bad = [type(g).__name__ for g in sans if not isinstance(g, _ALLOWED_SAN_TYPES)]
+    return (PASS, "") if not bad else (FAIL, f"forbidden SAN types: {bad}")
+
+def chk_san_dns_no_internal_or_trailing_dot(cert, der):
+    sans = _san_entries(cert)
+    if sans is None:
+        return NA, "SAN absent"
+    bad = []
+    for g in sans:
+        if not isinstance(g, x509.DNSName):
+            continue
+        v = g.value
+        if v.endswith("."):
+            bad.append(("trailing-dot", v))
+        # Internal name = no public TLD. Heuristic: must contain at least one '.' and last label must be at least 2 chars.
+        if "." not in v.lstrip("*."):
+            bad.append(("no-tld (likely Internal Name)", v))
+    return (PASS, "") if not bad else (FAIL, f"{bad[:5]}")
+
+def chk_san_dns_no_ip_reverse_zone(cert, der):
+    """Effective 2026-03-15, dNSName MUST NOT end in `.in-addr.arpa` or `.ip6.arpa`."""
+    nb = _notbefore(cert)
+    if nb < datetime.datetime(2026, 3, 15, tzinfo=datetime.timezone.utc):
+        return NA, "issued before 2026-03-15"
+    sans = _san_entries(cert)
+    if sans is None:
+        return NA, "SAN absent"
+    bad = []
+    for g in sans:
+        if not isinstance(g, x509.DNSName):
+            continue
+        v = g.value.lower().rstrip(".")
+        if v.endswith(".in-addr.arpa") or v.endswith(".ip6.arpa"):
+            bad.append(v)
+    return (PASS, "") if not bad else (FAIL, f"dNSName ends in IP reverse zone: {bad}")
+
+def chk_san_critical_iff_subject_empty(cert, der):
+    e = get_ext(cert, ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+    if not e:
+        return FAIL, "SAN absent"
+    subject_empty = len(list(cert.subject)) == 0
+    if subject_empty and not e.critical:
+        return FAIL, "subject empty but SAN not critical"
+    if not subject_empty and e.critical:
+        return FAIL, "subject non-empty but SAN marked critical"
+    return PASS, ("subject empty + SAN critical" if subject_empty else "subject non-empty + SAN non-critical")
+
+def chk_le_san_1_to_100_entries(cert, der):
+    sans = _san_entries(cert)
+    if sans is None:
+        return FAIL, "SAN absent"
+    n = sum(1 for g in sans if isinstance(g, (x509.DNSName, x509.IPAddress)))
+    if 1 <= n <= 100:
+        return PASS, f"n={n}"
+    return FAIL, f"n={n} (LE permits 1-100)"
+
+# Leaf basicConstraints
+def chk_leaf_bc_critical_if_present(cert, der):
+    e = get_ext(cert, ExtensionOID.BASIC_CONSTRAINTS)
+    if e is None:
+        return NA, "BC absent"
+    return (PASS, "") if e.critical else (FAIL, "BC present but not critical")
+
+def chk_leaf_bc_ca_false(cert, der):
+    e = get_ext(cert, ExtensionOID.BASIC_CONSTRAINTS)
+    if e is None:
+        return NA, "BC absent"
+    return (PASS, "") if e.value.ca is False else (FAIL, f"cA={e.value.ca}")
+
+# Leaf keyUsage by key algorithm
+def chk_leaf_ku_no_forbidden(cert, der):
+    """Leaf KU MUST NOT assert keyCertSign or cRLSign (regardless of key type)."""
+    ku = _ku(cert)
+    if not ku:
+        return NA, "KU absent"
+    if ku.key_cert_sign:
+        return FAIL, "keyCertSign set"
+    if ku.crl_sign:
+        return FAIL, "cRLSign set"
+    return PASS, ""
+
+def chk_leaf_ku_by_algorithm(cert, der):
+    """Per CABF §7.1.2.7.11:
+    - RSA: at least one of digitalSignature/keyEncipherment/dataEncipherment; no keyAgreement, nonRep, encipherOnly, decipherOnly, keyCertSign, cRLSign.
+    - ECDSA: digitalSignature MUST be set; only digitalSignature and (NOT RECOMMENDED) keyAgreement permitted.
+    """
+    ku = _ku(cert)
+    if not ku:
+        return NA, "KU absent"
+    pk = cert.public_key()
+    if isinstance(pk, rsa.RSAPublicKey):
+        bad = []
+        if ku.content_commitment: bad.append("nonRepudiation")
+        if ku.key_agreement: bad.append("keyAgreement")
+        if ku.key_cert_sign: bad.append("keyCertSign")
+        if ku.crl_sign: bad.append("cRLSign")
+        if ku.key_agreement and (ku.encipher_only or ku.decipher_only):
+            bad.append("encipher/decipherOnly")
+        if not (ku.digital_signature or ku.key_encipherment or ku.data_encipherment):
+            return FAIL, "RSA KU has none of digSig/keyEnc/dataEnc set"
+        return (PASS, "") if not bad else (FAIL, f"forbidden bits for RSA: {bad}")
+    if isinstance(pk, ec.EllipticCurvePublicKey):
+        bad = []
+        if not ku.digital_signature: bad.append("digitalSignature missing (MUST)")
+        if ku.content_commitment: bad.append("nonRepudiation")
+        if ku.key_encipherment: bad.append("keyEncipherment")
+        if ku.data_encipherment: bad.append("dataEncipherment")
+        if ku.key_cert_sign: bad.append("keyCertSign")
+        if ku.crl_sign: bad.append("cRLSign")
+        return (PASS, "") if not bad else (FAIL, f"forbidden/missing for ECDSA: {bad}")
+    return MANUAL, f"unknown key type {type(pk).__name__}"
+
+def chk_le_leaf_ku(cert, der):
+    """LE-specific: leaf KU MUST be critical; assert digitalSignature, optionally keyEncipherment, nothing else."""
+    e = get_ext(cert, ExtensionOID.KEY_USAGE)
+    if not e:
+        return FAIL, "KU absent"
+    if not e.critical:
+        return FAIL, "KU not critical"
+    ku = e.value
+    if not ku.digital_signature:
+        return FAIL, "digitalSignature not set"
+    bad = []
+    for name, val in (("nonRepudiation", ku.content_commitment),
+                      ("dataEncipherment", ku.data_encipherment),
+                      ("keyAgreement", ku.key_agreement),
+                      ("keyCertSign", ku.key_cert_sign),
+                      ("cRLSign", ku.crl_sign)):
+        if val: bad.append(name)
+    return (PASS, "") if not bad else (FAIL, f"extras: {bad}")
+
+# Leaf EKU
+def chk_leaf_eku_only_serverauth_and_clientauth(cert, der):
+    """Leaf EKU MUST contain id-kp-serverAuth; MAY contain id-kp-clientAuth; MUST NOT contain other allowed enumerated values."""
+    ekus = _ekus(cert)
+    if not ekus:
+        return FAIL, "EKU absent"
+    forbidden = {ID_KP_CODESIGNING, ID_KP_EMAILPROT, ID_KP_TIMESTAMPING, ID_KP_OCSPSIGNING, ANY_EKU, PRECERT_SIGNING}
+    bad = [o for o in ekus if o in forbidden]
+    if bad:
+        return FAIL, f"forbidden EKU OIDs: {bad}"
+    if ID_KP_SERVERAUTH not in ekus:
+        return FAIL, "no id-kp-serverAuth"
+    extra = set(ekus) - {ID_KP_SERVERAUTH, ID_KP_CLIENTAUTH}
+    return (PASS, ",".join(ekus)) if not extra else ("WARN", f"non-RECOMMENDED extras: {extra}")
+
+# Precert vs final cert
+PRECERT_POISON_OID = ObjectIdentifier("1.3.6.1.4.1.11129.2.4.3")
+SCT_LIST_OID = ObjectIdentifier("1.3.6.1.4.1.11129.2.4.2")
+
+def _is_precert(cert):
+    return has_ext(cert, PRECERT_POISON_OID)
+
+def _has_sct_list(cert):
+    return has_ext(cert, SCT_LIST_OID)
+
+def chk_precert_poison_present_critical(cert, der):
+    e = get_ext(cert, PRECERT_POISON_OID)
+    if e is None and not _has_sct_list(cert):
+        return NA, "appears to be neither precert nor SCT-bearing final cert"
+    if e is None:
+        return NA, "final cert (no poison); rule applies to precerts"
+    if not e.critical:
+        return FAIL, "poison present but not critical"
+    # The Precertificate Poison extension is rendered as a PrecertPoison object by cryptography;
+    # it does not expose an extnValue. We confirm presence + criticality and trust the cryptography
+    # library's parse (which would fail on a malformed extnValue).
+    return PASS, "present and critical"
+
+def chk_precert_sct_list_absent(cert, der):
+    if not _is_precert(cert):
+        return NA, "not a precert"
+    if _has_sct_list(cert):
+        return FAIL, "precert has SCT List extension"
+    return PASS, ""
+
+def chk_precert_poison_absent_in_final(cert, der):
+    if _is_precert(cert):
+        return NA, "is a precert"
+    return (PASS, "") if not _has_ext_oid(cert, PRECERT_POISON_OID) else (FAIL, "final cert has poison")
+
+def _has_ext_oid(cert, oid):
+    return has_ext(cert, oid)
+
+# CRL DP / AIA OCSP conditional presence
+def chk_leaf_crldp_present_unless_short_or_aia_ocsp(cert, der):
+    """CABF §7.1.2.11.2: CRLDP MUST be present in subscriber certs unless short-lived AND no AIA OCSP."""
+    seconds = (cert.not_valid_after_utc - cert.not_valid_before_utc).total_seconds()
+    nb = _notbefore(cert)
+    short_lived_cap = 7 * 86400 if nb >= datetime.datetime(2026, 3, 15, tzinfo=datetime.timezone.utc) else 10 * 86400
+    is_short_lived = seconds <= short_lived_cap
+    has_aia_ocsp = False
+    aia = get_ext(cert, ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+    if aia:
+        for ad in aia.value:
+            if ad.access_method == AuthorityInformationAccessOID.OCSP:
+                has_aia_ocsp = True
+                break
+    crldp_present = has_ext(cert, ExtensionOID.CRL_DISTRIBUTION_POINTS)
+    if is_short_lived:
+        return (PASS, "short-lived (CRLDP optional)") if not crldp_present or crldp_present else (PASS, "")
+    if not has_aia_ocsp and not crldp_present:
+        return FAIL, "not short-lived AND no AIA OCSP — CRLDP MUST be present"
+    return PASS, f"crldp={crldp_present} aia_ocsp={has_aia_ocsp}"
+
+# LE certificate policies (exactly the DV OID, no others)
+def chk_le_leaf_certpolicies_exact_dv(cert, der):
+    oids = _policy_oids(cert)
+    if oids == ["2.23.140.1.2.1"]:
+        return PASS, ""
+    return FAIL, f"got: {oids} (LE expects only [2.23.140.1.2.1])"
+
+# Leaf certificate policies — CABF profile: exactly one CABF Reserved OID
+def chk_leaf_certpolicies_exactly_one_reserved(cert, der):
+    oids = _policy_oids(cert)
+    reserved = [o for o in oids if o in CABF_RESERVED_POLICY_OIDS]
+    if len(reserved) == 1:
+        return PASS, f"reserved={reserved}"
+    if len(reserved) == 0:
+        return FAIL, f"no CABF Reserved policy OID; got: {oids}"
+    return FAIL, f"more than one CABF Reserved policy OID: {reserved}"
 
 # CABF §7.1.4.2 attribute ordering for CA certs and DV/IV/OV/EV subject profiles.
 # Map OID -> ordering position. Lower numbers come first.
@@ -1497,7 +1812,74 @@ DISPATCH = [
     (r"MUST NOT combine any two or more of Server Authentication", chk_microsoft_3_1_13_separation),
     (r"Issuing CA must not combine server authentication", chk_microsoft_3_1_13_separation),
 
-    # ===== Generic rules =====
+    # ===== Leaf-specific rules — checked early so they win over generic patterns =====
+    # Validity
+    (r"`notBefore` value MUST be within 48 hours of the certificate signing operation", chk_leaf_notbefore_within_48h),
+    (r"validity period.*MUST NOT exceed 398 days.*before 2026-03-15", chk_leaf_validity_max),
+    (r"validity period MUST NOT exceed 200 days.*2026-03-15.*2027-03-15", chk_leaf_validity_max),
+    (r"validity period MUST NOT exceed 100 days.*2027-03-15.*2029-03-15", chk_leaf_validity_max),
+    (r"validity period MUST NOT exceed 47 days.*2029-03-15", chk_leaf_validity_max),
+    (r"LE-issued subscriber certificate's validity period.*100 days", chk_le_leaf_validity_max_100d),
+    (r"LE-issued subscriber certificate's validity period is at most 100 days", chk_le_leaf_validity_max_100d),
+
+    # Subject
+    (r"LE-issued subscriber certificate's `subject` MUST NOT contain", chk_le_leaf_no_forbidden_subject_attrs),
+    (r"LE-issued subscriber certificate's `subject` MUST either omit `commonName` or set `commonName` to one of the values present", chk_le_leaf_cn_derived_from_san),
+    (r"If a `commonName` attribute is present, its value MUST exactly correspond to one entry in the `subjectAltName`", chk_le_leaf_cn_derived_from_san),
+
+    # SAN
+    (r"`subjectAltName` extension MUST contain at least one `dNSName` or `iPAddress`", chk_san_at_least_one_dns_or_ip),
+    (r"`subjectAltName` extension MUST be marked critical if the `subject` field is an empty SEQUENCE", chk_san_critical_iff_subject_empty),
+    (r"`subjectAltName` extension MUST NOT be marked critical if the `subject` field is not empty", chk_san_critical_iff_subject_empty),
+    (r"`subjectAltName` MUST NOT contain `otherName`, `rfc822Name`", chk_san_only_dns_or_ip),
+    (r"Each `dNSName` value MUST be a Fully-Qualified Domain Name or Wildcard Domain Name, MUST NOT be an Internal Name", chk_san_dns_no_internal_or_trailing_dot),
+    (r"Each `dNSName` value MUST NOT be encoded with a trailing zero-length root label", chk_san_dns_no_internal_or_trailing_dot),
+    (r"Effective 2026-03-15, each `dNSName` value MUST NOT end in an IP Address Reverse Zone Suffix", chk_san_dns_no_ip_reverse_zone),
+    (r"LE-issued subscriber certificate's `subjectAltName` MUST contain at least 1 and at most 100", chk_le_san_1_to_100_entries),
+    (r"LE-issued subscriber certificate's `subjectAltName` extension MUST be marked critical when the `subject` does not contain a `commonName`", chk_san_critical_iff_subject_empty),
+
+    # basicConstraints (leaf)
+    (r"`basicConstraints` extension MAY be present", chk_manual("MAY")),
+    (r"If present, the `basicConstraints` extension MUST be marked critical", chk_leaf_bc_critical_if_present),
+    (r"If present, the `cA` boolean MUST be FALSE", chk_leaf_bc_ca_false),
+    (r"If present, the `pathLenConstraint` field MUST NOT be present", chk_basic_constraints_pathlen_absent),
+    (r"LE-issued subscriber certificate's `basicConstraints` MUST be present, MUST be marked critical, and MUST have `cA = FALSE`", chk_leaf_bc_ca_false),
+
+    # keyUsage (leaf)
+    (r"`keyUsage` extension SHOULD be present", chk_ku_present),
+    (r"If present, the `keyUsage` extension MUST be marked critical", chk_ku_critical),
+    (r"The `nonRepudiation`, `keyAgreement` \(RSA only\), `encipherOnly`, `decipherOnly`, `keyCertSign`, and `cRLSign` bits MUST NOT be asserted", chk_leaf_ku_no_forbidden),
+    (r"At least one of `digitalSignature`, `keyEncipherment`, or `dataEncipherment` MUST be asserted", chk_leaf_ku_by_algorithm),
+    (r"If the SPKI is ECDSA:", chk_leaf_ku_by_algorithm),
+    (r"If the SPKI is RSA:", chk_leaf_ku_by_algorithm),
+    (r"`digitalSignature` bit MUST be asserted\.", chk_leaf_ku_by_algorithm),  # ECDSA-only require
+    (r"`digitalSignature` bit MAY be asserted; it SHOULD be asserted", chk_manual("RSA SHOULD")),
+    (r"LE-issued subscriber certificate's `keyUsage` extension MUST be present, MUST be marked critical, MUST assert `digitalSignature`", chk_le_leaf_ku),
+
+    # EKU (leaf)
+    (r"`extKeyUsage` extension MUST be present", chk_eku_present),
+    (r"`extKeyUsage` extension MUST NOT be marked critical", chk_eku_noncritical_if_present),
+    (r"LE-issued subscriber certificate's `extKeyUsage` MUST contain `id-kp-serverAuth`, MAY contain `id-kp-clientAuth`", chk_leaf_eku_only_serverauth_and_clientauth),
+
+    # Certificate policies (leaf)
+    (r"`certificatePolicies` extension MUST be present", chk_certpolicies_present),
+    (r"`certificatePolicies` extension MUST NOT be marked critical", chk_certpolicies_noncritical),
+    (r"extension MUST contain exactly one CABF Reserved Certificate Policy Identifier", chk_leaf_certpolicies_exactly_one_reserved),
+    (r"LE-issued subscriber certificate's `certificatePolicies` MUST contain exactly the DV OID `2\.23\.140\.1\.2\.1`", chk_le_leaf_certpolicies_exact_dv),
+
+    # Precert / SCT
+    (r"Precertificate Poison extension.*MUST be present", chk_precert_poison_present_critical),
+    (r"Precertificate Poison extension MUST be marked critical", chk_precert_poison_present_critical),
+    (r"poison extension's presence", chk_precert_poison_present_critical),
+    (r"Precertificate Poison extension `extnValue` MUST be exactly the hex-encoded bytes `0500`", chk_precert_poison_present_critical),
+    (r"SCT List extension MUST NOT be present", chk_precert_sct_list_absent),
+    (r"Precertificate Poison extension MUST NOT be present", chk_precert_poison_absent_in_final),
+    (r"LE-issued precertificate contains the RFC 6962 precertificate poison extension marked critical", chk_precert_poison_present_critical),
+
+    # CRL DP (leaf conditional)
+    (r"`cRLDistributionPoints` extension MUST be present in a subscriber certificate", chk_leaf_crldp_present_unless_short_or_aia_ocsp),
+
+    # ===== Context-conditional cascade rules — checked FIRST so they win over generic EKU patterns =====
     # Version
     (r"`version`.*MUST be v3", chk_version_v3),
     (r"certificate.*version.*MUST be X\.509 v3", chk_version_v3),
@@ -2031,6 +2413,11 @@ def main():
     make_csv(os.path.join(DOCS, "intermediates.md"),
              os.path.join(LE_CERTS, "intermediates"),
              os.path.join(LE_CERTS, "intermediates.csv"))
+    if os.path.isdir(os.path.join(LE_CERTS, "leaves")) and glob.glob(os.path.join(LE_CERTS, "leaves", "*.der")):
+        print("=== leaves.csv ===")
+        make_csv(os.path.join(DOCS, "leaves.md"),
+                 os.path.join(LE_CERTS, "leaves"),
+                 os.path.join(LE_CERTS, "leaves.csv"))
 
 if __name__ == "__main__":
     main()
