@@ -21,6 +21,11 @@
     --note-bg: #fffceb;
     --note-border: #e1dbb6;
     --highlight: #fff09a;
+    --ok: #2e7d32;
+    --info: #c08400;
+    --bad: #c62828;
+    --na: #888;
+    --unreviewed-bg: rgba(255, 240, 154, 0.12);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -166,16 +171,40 @@
     margin-bottom: 12px;
   }
 
-  /* Section row: grid with content + N commentary columns */
+  /* Section row: grid with content + status gutter + N commentary columns */
   .section-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(var(--side-count, 1), var(--side-width, 340px));
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 5px repeat(var(--side-count, 1), var(--side-width, 340px));
+    gap: 10px;
     padding: 10px 0;
     border-top: 1px solid var(--border);
   }
   .section-row.first { border-top: none; }
   .section-row.preamble { border-top: none; }
+
+  /* Status gutter (column 2) — colored segments aligned with each element. */
+  .status-strip-col {
+    position: relative;
+    min-width: 5px;
+  }
+  .status-seg {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-radius: 2px;
+  }
+  .status-seg.compliant     { background: var(--ok); }
+  .status-seg.need-info     { background: var(--info); }
+  .status-seg.noncompliant  { background: var(--bad); }
+  .status-seg.na            { background: var(--na); }
+
+  /* Unreviewed content tint */
+  [data-elt-id][data-review="unreviewed"] {
+    background: var(--unreviewed-bg);
+  }
+  [data-elt-id][data-review="unreviewed"]:hover {
+    background: rgba(255, 240, 154, 0.30);
+  }
 
   /* Main content cell */
   .section-content {
@@ -414,6 +443,46 @@
     font-family: inherit;
   }
   .comment-card .toolbar button:hover { background: var(--accent-bg); }
+
+  /* Per-comment review status buttons */
+  .review-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 5px;
+  }
+  .review-btn {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--fg);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    user-select: none;
+  }
+  .review-btn:hover { background: var(--accent-bg); }
+  .review-btn.active.compliant    { background: var(--ok);   color: white; border-color: var(--ok); }
+  .review-btn.active.need-info    { background: var(--info); color: white; border-color: var(--info); }
+  .review-btn.active.noncompliant { background: var(--bad);  color: white; border-color: var(--bad); }
+  .review-btn.active.na           { background: var(--na);   color: white; border-color: var(--na); }
+
+  /* Read-only status pill (shown on loaded-set comments) */
+  .readonly-status {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    color: white;
+    margin-top: 5px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .readonly-status.compliant    { background: var(--ok); }
+  .readonly-status.need-info    { background: var(--info); }
+  .readonly-status.noncompliant { background: var(--bad); }
+  .readonly-status.na           { background: var(--na); }
   .commentary-empty {
     color: var(--muted);
     font-size: 11px;
@@ -508,6 +577,7 @@
 
   @media (max-width: 1100px) {
     .section-row { grid-template-columns: 1fr !important; }
+    .status-strip-col { display: none; }
     .commentary-col { border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; min-height: 0 !important; }
     .commentary-col .comment-card { position: static !important; left: auto !important; right: auto !important; margin-bottom: 6px; }
     .elt-handle { right: 0; top: -22px; }
@@ -609,6 +679,39 @@ function updateCommentText(docKey, eltId, commentId, newText) {
   arr[i].text = newText;
   arr[i].updatedAt = new Date().toISOString();
   setComments(docKey, eltId, arr);
+}
+
+function updateCommentStatus(docKey, eltId, commentId, status) {
+  const arr = getComments(docKey, eltId);
+  const i = arr.findIndex((c) => c.id === commentId);
+  if (i < 0) return;
+  arr[i].status = status || undefined;
+  arr[i].updatedAt = new Date().toISOString();
+  setComments(docKey, eltId, arr);
+}
+
+// Returns the highest-priority status among local comments on this element,
+// or null if none have a status. Priority: noncompliant > need-info > compliant > na.
+const STATUS_PRIORITY = { noncompliant: 4, "need-info": 3, compliant: 2, na: 1 };
+function statusForComment(c) { return c && c.status ? c.status : null; }
+function ownElementStatus(docKey, eltId) {
+  let best = null, bestP = 0;
+  for (const c of getComments(docKey, eltId)) {
+    const s = statusForComment(c);
+    if (s && (STATUS_PRIORITY[s] || 0) > bestP) { best = s; bestP = STATUS_PRIORITY[s]; }
+  }
+  return best;
+}
+// Resolved status: element's own status, else section header's status, else null.
+function resolvedElementStatus(docKey, eltId) {
+  const own = ownElementStatus(docKey, eltId);
+  if (own) return own;
+  const slash = eltId.indexOf("/");
+  if (slash >= 0) {
+    const sec = eltId.substring(0, slash);
+    return ownElementStatus(docKey, sec);
+  }
+  return null;
 }
 
 function deleteComment(docKey, eltId, commentId) {
@@ -901,6 +1004,9 @@ function renderDocPage(docKey) {
 
     // Add commentary column(s)
     row.appendChild(content);
+    const stripCol = document.createElement("div");
+    stripCol.className = "status-strip-col";
+    row.appendChild(stripCol);
     row.appendChild(makeCommentaryColumn({ kind: "local", docKey, sectionId }));
     for (const set of LOADED_SETS) {
       row.appendChild(makeCommentaryColumn({ kind: "loaded", docKey, sectionId, set }));
@@ -1122,6 +1228,62 @@ function alignAllSectionRows() {
   document.querySelectorAll(".section-row").forEach(alignSectionRowComments);
 }
 
+// Paint the status gutter and the unreviewed tint for every commentable element
+// in a section. The gutter fills the entire section span with the section's
+// own status (if any), then overlays each element's own status on top.
+function decorateSection(row) {
+  if (!row || !row.querySelector) return;
+  const content = row.querySelector(".section-content");
+  const strip = row.querySelector(".status-strip-col");
+  if (!content || !strip) return;
+  const page = row.closest(".doc-page");
+  if (!page) return;
+  const docKey = page.dataset.docKey;
+  const sectionId = row.dataset.sectionId;
+  strip.innerHTML = "";
+
+  if (window.innerWidth > 1100) {
+    const rowRect = row.getBoundingClientRect();
+    // 1) section-wide fill from the heading's own status (if any).
+    const secStatus = ownElementStatus(docKey, sectionId);
+    if (secStatus) {
+      const headingEl = content.querySelector('[data-elt-id="' + cssEscape(sectionId) + '"]');
+      // Start at the heading's top (or section top if no heading element / preamble).
+      const startTop = headingEl ? (headingEl.getBoundingClientRect().top - rowRect.top) : 0;
+      const endTop = row.offsetHeight;
+      const seg = document.createElement("div");
+      seg.className = "status-seg " + secStatus;
+      seg.style.top = startTop + "px";
+      seg.style.height = Math.max(0, endTop - startTop) + "px";
+      strip.appendChild(seg);
+    }
+    // 2) per-element override segments.
+    content.querySelectorAll("[data-elt-id]").forEach((el) => {
+      const eid = el.dataset.eltId;
+      if (eid === sectionId) return; // section already covered above
+      const own = ownElementStatus(docKey, eid);
+      if (!own) return;
+      const rect = el.getBoundingClientRect();
+      const seg = document.createElement("div");
+      seg.className = "status-seg " + own;
+      seg.style.top = (rect.top - rowRect.top) + "px";
+      seg.style.height = rect.height + "px";
+      strip.appendChild(seg);
+    });
+  }
+
+  // 3) Unreviewed background tint: anything with no resolved status gets one.
+  content.querySelectorAll("[data-elt-id]").forEach((el) => {
+    const eid = el.dataset.eltId;
+    if (resolvedElementStatus(docKey, eid)) el.removeAttribute("data-review");
+    else el.setAttribute("data-review", "unreviewed");
+  });
+}
+
+function decorateAllSections() {
+  document.querySelectorAll(".section-row").forEach(decorateSection);
+}
+
 let _alignScheduled = false;
 function scheduleAlign() {
   if (_alignScheduled) return;
@@ -1129,13 +1291,14 @@ function scheduleAlign() {
   requestAnimationFrame(() => {
     _alignScheduled = false;
     alignAllSectionRows();
+    decorateAllSections();
   });
 }
 
 let _resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(alignAllSectionRows, 80);
+  _resizeTimer = setTimeout(() => { alignAllSectionRows(); decorateAllSections(); }, 80);
 });
 
 function compareEltIds(a, b) {
@@ -1154,12 +1317,32 @@ function compareEltIds(a, b) {
   return ka[0] - kb[0] || ka[1] - kb[1];
 }
 
+const STATUS_OPTIONS = [
+  { value: "compliant",    label: "Compliant" },
+  { value: "need-info",    label: "Need info" },
+  { value: "noncompliant", label: "Noncompliant" },
+  { value: "na",           label: "N/A" },
+];
+
+function renderReviewButtons(currentStatus) {
+  let html = '<div class="review-status-row" role="group" aria-label="Review status">';
+  for (const opt of STATUS_OPTIONS) {
+    const active = currentStatus === opt.value;
+    html += '<button class="review-btn ' + opt.value + (active ? ' active' : '') +
+            '" data-review-value="' + opt.value + '" title="Toggle ' + opt.label + '">' +
+            escapeHtml(opt.label) + '</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderCommentCard({ docKey, eltId, comment, readonly }) {
   const card = document.createElement("div");
   card.className = "comment-card" + (readonly ? " readonly" : "");
   card.dataset.docKey = docKey;
   card.dataset.eltId = eltId;
   card.dataset.commentId = comment.id;
+  card.dataset.reviewStatus = comment.status || "";
   const isSection = !eltId.includes("/");
   const refLabel = formatRefSymbol(eltId);
   let html = '<div>' +
@@ -1171,19 +1354,23 @@ function renderCommentCard({ docKey, eltId, comment, readonly }) {
   }
   html += '</div>';
 
-  // Body: read-only renders markdown; editable shows textarea + rendered preview
+  // Body: read-only renders markdown + a status pill; editable shows textarea + preview + review buttons.
   if (readonly) {
     html += '<div class="rendered">' + renderCommentMarkdown(comment.text) + '</div>';
+    if (comment.status) {
+      const opt = STATUS_OPTIONS.find((o) => o.value === comment.status);
+      html += '<div class="readonly-status ' + comment.status + '">' + escapeHtml(opt ? opt.label : comment.status) + '</div>';
+    }
   } else {
     html += '<textarea class="cmt-text" placeholder="Markdown. Refs: [label](#doc/sec/p3), [[doc/sec/p3]], or &quot;CABF BR §3.2 ¶1&quot;">' +
             escapeHtml(comment.text || "") + '</textarea>';
     html += '<div class="rendered"></div>';
+    html += renderReviewButtons(comment.status);
     html += '<div class="meta"><span class="save-status"></span><span>' + (comment.updatedAt ? new Date(comment.updatedAt).toLocaleString() : "") + '</span></div>';
   }
   card.innerHTML = html;
 
   if (!readonly) {
-    // initial render preview
     const ta = card.querySelector(".cmt-text");
     const rendered = card.querySelector(".rendered");
     rendered.innerHTML = renderCommentMarkdown(ta.value);
@@ -1433,12 +1620,38 @@ window.addEventListener("hashchange", navigateHash);
 // re-renders the page.
 document.addEventListener("mousedown", (e) => {
   const jump = e.target.closest("[data-jump-elt]");
-  if (!jump) return;
-  e.preventDefault();
-  const eid = jump.dataset.jumpElt;
-  const card = jump.closest(".comment-card");
-  const docKey = card?.dataset.docKey;
-  if (docKey) window.location.hash = "#" + docKey + "/" + eid;
+  if (jump) {
+    e.preventDefault();
+    const eid = jump.dataset.jumpElt;
+    const card = jump.closest(".comment-card");
+    const docKey = card?.dataset.docKey;
+    if (docKey) window.location.hash = "#" + docKey + "/" + eid;
+    return;
+  }
+  // Review status buttons — handle on mousedown w/ preventDefault so the
+  // textarea keeps focus and the empty-card cleanup doesn't fire (an empty
+  // comment with a status set must be kept).
+  const reviewBtn = e.target.closest(".review-btn[data-review-value]");
+  if (reviewBtn) {
+    e.preventDefault();
+    const card = reviewBtn.closest(".comment-card");
+    if (!card) return;
+    const newValue = reviewBtn.dataset.reviewValue;
+    const cur = card.dataset.reviewStatus || "";
+    const next = cur === newValue ? "" : newValue;
+    const docKey = card.dataset.docKey;
+    const eltId = card.dataset.eltId;
+    const cid = card.dataset.commentId;
+    updateCommentStatus(docKey, eltId, cid, next);
+    card.dataset.reviewStatus = next;
+    card.querySelectorAll(".review-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.reviewValue === next);
+    });
+    const row = card.closest(".section-row");
+    if (row) decorateSection(row);
+    refreshAllHandlesFor(docKey, eltId);
+    return;
+  }
 });
 
 document.addEventListener("click", (e) => {
@@ -1540,13 +1753,16 @@ function insertCardSorted(col, card) {
   col.appendChild(card);
 }
 
-// Blur on empty comment textarea → delete the comment (clean up "open-and-leave" cards).
+// Blur on a comment textarea → delete the comment if it has no text AND no
+// review status. Keeping status-only comments lets the user just mark a
+// section "Compliant" without writing any commentary.
 document.addEventListener("focusout", (e) => {
   const ta = e.target;
   if (!ta.matches || !ta.matches(".comment-card .cmt-text")) return;
   if (ta.value.trim() !== "") return;
   const card = ta.closest(".comment-card");
   if (!card) return;
+  if (card.dataset.reviewStatus) return; // keep status-only comments
   const docKey = card.dataset.docKey;
   const eltId = card.dataset.eltId;
   const cid = card.dataset.commentId;
