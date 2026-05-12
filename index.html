@@ -971,23 +971,46 @@ function makeEltHandle(docKey, eltId, kind) {
 function refreshHandle(a) {
   if (!a) return;
   const n = commentCount(a.dataset.docKey, a.dataset.eltId);
+  const marker = eltMarker(a.dataset.eltId);
   if (n > 0) {
     a.classList.add("has-comments");
-    a.innerHTML = '<span class="count">' + n + '</span> ' + suffixForKind(a.dataset.kind);
+    a.innerHTML = '<span class="count">' + n + '</span> ' + escapeHtml(marker);
     a.title = n + " comment(s) on " + a.dataset.docKey + "/" + a.dataset.eltId;
   } else {
     a.classList.remove("has-comments");
-    a.innerHTML = '+ ' + suffixForKind(a.dataset.kind);
+    a.innerHTML = '+ ' + escapeHtml(marker);
     a.title = "Add comment on " + a.dataset.docKey + "/" + a.dataset.eltId;
   }
 }
 
-function suffixForKind(kind) {
-  if (kind === "section") return "§";
-  if (kind === "p") return "¶";
-  if (kind === "li") return "li";
-  if (kind === "tr") return "tr";
-  return "";
+// Symbol for the element within its section (no section number — the handle
+// is positioned next to the element so it's clear which section). For pure
+// section refs the marker is just "§".
+//   p3  → "¶3"     li5 → "•5"     tr2 → "□2"     (section) → "§"
+function eltMarker(eltId) {
+  const slash = eltId.indexOf("/");
+  if (slash < 0) return "§";
+  const rest = eltId.substring(slash + 1);
+  const m = rest.match(/^(p|li|tr)(\d+)$/);
+  if (!m) return rest;
+  const sym = m[1] === "p" ? "¶" : (m[1] === "li" ? "•" : "□");
+  return sym + m[2];
+}
+
+// Full ref including section, for the comment-card pill.
+//   1.2.1            → "§1.2.1"
+//   1.2.1/p3         → "§1.2.1 ¶3"
+//   1.2.1/li5        → "§1.2.1 •5"
+//   1.2.1/tr2        → "§1.2.1 □2"
+function formatRefSymbol(eltId) {
+  const slash = eltId.indexOf("/");
+  if (slash < 0) return "§" + eltId;
+  const section = eltId.substring(0, slash);
+  const rest = eltId.substring(slash + 1);
+  const m = rest.match(/^(p|li|tr)(\d+)$/);
+  if (!m) return "§" + section + " " + rest;
+  const sym = m[1] === "p" ? "¶" : (m[1] === "li" ? "•" : "□");
+  return "§" + section + " " + sym + m[2];
 }
 
 function refreshAllHandlesFor(docKey, eltId) {
@@ -1140,7 +1163,7 @@ function renderCommentCard({ docKey, eltId, comment, readonly }) {
   card.dataset.eltId = eltId;
   card.dataset.commentId = comment.id;
   const isSection = !eltId.includes("/");
-  const refLabel = eltId;
+  const refLabel = formatRefSymbol(eltId);
   let html = '<div>' +
     '<span class="ref-chip' + (isSection ? ' section-ref' : '') + '" data-jump-elt="' + escapeAttr(eltId) + '" title="Jump to element">' +
       escapeHtml(refLabel) +
@@ -1404,6 +1427,22 @@ function rerouteSoft() {
 window.addEventListener("hashchange", navigateHash);
 
 // ===== Event delegation =====
+
+// Handle ref-chip clicks on mousedown — otherwise clicking the chip from
+// inside a focused (and possibly empty) comment textarea would blur the
+// textarea, run the focusout cleanup, and remove the chip before the click
+// event fires. preventDefault keeps focus where it is until navigation
+// re-renders the page.
+document.addEventListener("mousedown", (e) => {
+  const jump = e.target.closest("[data-jump-elt]");
+  if (!jump) return;
+  e.preventDefault();
+  const eid = jump.dataset.jumpElt;
+  const card = jump.closest(".comment-card");
+  const docKey = card?.dataset.docKey;
+  if (docKey) window.location.hash = "#" + docKey + "/" + eid;
+});
+
 document.addEventListener("click", (e) => {
   // Nav button
   const navbtn = e.target.closest(".navbtn");
